@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "../interfaces/mrkt_interfaces/IAuction.sol";
-import "../interfaces/mrkt_interfaces/IRegistry.sol";
+import "./interfaces/marketplace/IAuction.sol";
+import "./interfaces/marketplace/IRegistry.sol";
 
 interface INFT {
     function royaltyInfo(uint256 id, uint256 _salePrice) external view returns (address, uint256);

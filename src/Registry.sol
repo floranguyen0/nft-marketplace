@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../interfaces/mrkt_interfaces/IRegistry.sol";
+import "./interfaces/marketplace/IRegistry.sol";
 
 /// @title Registry for an NFT matketplace
 /// @author Linum Labs
