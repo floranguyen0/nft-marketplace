@@ -5,30 +5,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "./interfaces/marketplace/ISale.sol";
+import "./interfaces/marketplace/INFT.sol";
 import "./interfaces/marketplace/IRegistry.sol";
-
-interface INFT {
-    function royaltyInfo(uint256 id, uint256 _salePrice)
-        external
-        view
-        returns (address, uint256);
-
-    function balanceOf(address account, uint256 id)
-        external
-        view
-        returns (uint256);
-
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 id,
-        uint256 amount,
-        bytes memory data
-    ) external;
-
-    function supportsInterface(bytes4 interfaceID) external returns (bool);
-}
 
 /// @title Sale
 /// @author Linum Labs
