@@ -35,7 +35,7 @@ interface INFT {
 /// @notice Allows selling bundles of ERC1155 NFTs at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
-contract Sale is ISale, Ownable, ReentrancyGuard {
+contract Sale is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
@@ -45,7 +45,40 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
     Counters.Counter private _saleId;
     IRegistry private Registry;
 
-    mapping(uint256 => Sale) private sales;
+    event NewSale(uint256 indexed id, SaleInfo newSale);
+    event SaleCancelled(uint256 indexed saleId);
+    event Purchase(
+        uint256 saleId,
+        address purchaser,
+        address recipient,
+        uint256 quantity
+    );
+    event NFTsReclaimed(
+        uint256 indexed id,
+        address indexed owner,
+        uint256 indexed amount
+    );
+    event BalanceUpdated(
+        address indexed accountOf,
+        address indexed tokenAddress,
+        uint256 indexed newBalance
+    );
+
+    struct SaleInfo {
+        uint256 id; // id of sale
+        address owner; // address of NFT owner
+        address nftContract;
+        uint256 nftId;
+        uint256 amount; // amount of NFTs being sold
+        uint256 purchased; // amount of NFTs purchased thus far
+        uint256 startTime;
+        uint256 endTime;
+        uint256 price;
+        uint256 maxBuyAmount;
+        address currency; // use zero address or 0xaaa for ETH
+    }
+
+    mapping(uint256 => SaleInfo) private sales;
     mapping(uint256 => bool) private cancelled;
     mapping(uint256 => mapping(address => uint256)) private purchased;
     // user address => tokenAddress => amount
@@ -55,11 +88,13 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         Registry = IRegistry(registry);
     }
 
-    /// @inheritdoc ISale
+    /// @notice Returns a struct with an sale's details
+    /// @param saleId the index of the sale being queried
+    /// @return an "SaleInfo" struct with the details of the sale requested
     function getSaleDetails(uint256 saleId)
         external
         view
-        returns (Sale memory)
+        returns (SaleInfo memory)
     {
         require(
             saleId <= _saleId.current() && saleId > 0,
@@ -68,13 +103,11 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         return sales[saleId];
     }
 
-    /// @inheritdoc ISale
-    function getSaleStatus(uint256 saleId)
-        public
-        view
-        override
-        returns (string memory)
-    {
+    /// @notice Returns the status of a particular sale
+    /// @dev statuses are: PENDING, CANCELLED, ACTIVE, ENDED
+    /// @param saleId the index of the sale being queried
+    /// @return a string of the sale's status
+    function getSaleStatus(uint256 saleId) public view returns (string memory) {
         require(
             saleId <= _saleId.current() && saleId > 0,
             "sale does not exist"
@@ -94,7 +127,11 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         revert("error");
     }
 
-    /// @inheritdoc ISale
+    /// @notice Returns the in-contract balance of a specific address for a specific token
+    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
+    /// @param account the address to query the balance of
+    /// @param token the address of the token to query the balance for
+    /// @return the uint256 balance of the token queired for the address queried
     function getClaimableBalance(address account, address token)
         external
         view
@@ -103,7 +140,17 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         return claimableFunds[account][token];
     }
 
-    /// @inheritdoc ISale
+    /// @notice Creates a sale of ERC1155 NFTs
+    /// @dev NFT contract must be ERC2981-compliant and recognized by Registry
+    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
+    /// @param nftContract the address of the NFT contract
+    /// @param id the id of the NFTs on the NFT contract
+    /// @param startTime uint256 timestamp when the sale should commence
+    /// @param endTime uint256 timestamp when sale should end
+    /// @param price the price for each NFT
+    /// @param maxBuyAmount the maximum amount one address can purchase
+    /// @param currency address of the token bids should be made in
+    /// @return the index of the sale being created
     function createSale(
         address nftContract,
         uint256 id,
@@ -140,7 +187,7 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         _saleId.increment();
         uint256 saleId = _saleId.current();
 
-        sales[saleId] = Sale({
+        sales[saleId] = SaleInfo({
             id: saleId,
             owner: msg.sender,
             nftContract: nftContract,
@@ -161,7 +208,13 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         return saleId;
     }
 
-    /// @inheritdoc ISale
+    /// @notice Allows purchase of NFTs from a sale
+    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
+    /// @dev automatically calculates system fee and royalties (where applicable)
+    /// @param saleId the index of the sale to purchase from
+    /// @param amountToBuy the number of NFTs to purchase
+    /// @param amountFromBalance the amount to spend from msg.sender's balance in this contract
+    /// @return a bool indicating success
     function buy(
         uint256 saleId,
         address recipient,
@@ -177,7 +230,7 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
                 keccak256(bytes("ACTIVE")),
             "sale is not active"
         );
-        Sale memory currentSale = sales[saleId];
+        SaleInfo memory currentSale = sales[saleId];
         require(
             purchased[saleId][msg.sender] + amountToBuy <=
                 currentSale.maxBuyAmount,
@@ -276,7 +329,9 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         return true;
     }
 
-    /// @inheritdoc ISale
+    /// @notice Allows seller to reclaim unsold NFTs
+    /// @dev sale must be cancelled or ended
+    /// @param saleId the index of the sale to claim from
     function claimNfts(uint256 saleId) external {
         bytes32 status = keccak256(bytes(getSaleStatus(saleId)));
         require(
@@ -304,7 +359,9 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         emit NFTsReclaimed(saleId, msg.sender, stock);
     }
 
-    /// @inheritdoc ISale
+    /// @notice Withdraws in-contract balance of a particular token
+    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
+    /// @param tokenContract the address of the token to claim
     function claimFunds(address tokenContract) external {
         require(
             claimableFunds[msg.sender][tokenContract] > 0,
@@ -327,7 +384,8 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         );
     }
 
-    /// @inheritdoc ISale
+    /// @notice Allows contract owner or seller to cancel a pending or active sale
+    /// @param saleId the index of the sale to cancel
     function cancelSale(uint256 saleId) external {
         require(
             msg.sender == sales[saleId].owner || msg.sender == owner(),
@@ -345,7 +403,7 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         emit SaleCancelled(saleId);
     }
 
-    /// @inheritdoc ISale
+    /// @notice allows contract to receive ERC1155 NFTs
     function onERC1155Received(
         address operator,
         address from,
