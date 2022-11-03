@@ -23,7 +23,7 @@ contract Auction is Ownable, ReentrancyGuard {
     Counters.Counter private _auctionId;
     IRegistry private Registry;
 
-    event NewAuction(uint256 indexed auctionId, Auction newAuction);
+    event NewAuction(uint256 indexed auctionId, AuctionInfo newAuction);
     event AuctionCancelled(uint256 indexed auctionId);
     event BidPlaced(uint256 auctionId, uint256 amount);
     event ClaimNFT(
@@ -38,7 +38,7 @@ contract Auction is Ownable, ReentrancyGuard {
         uint256 indexed newBalance
     );
 
-    struct Auction {
+    struct AuctionInfo {
         uint256 id; // id of auction
         address owner; // address of NFT owner
         address nftContract;
@@ -56,7 +56,7 @@ contract Auction is Ownable, ReentrancyGuard {
         uint256 timestamp;
     }
 
-    mapping(uint256 => Auction) private auctions;
+    mapping(uint256 => AuctionInfo) private auctions;
     mapping(uint256 => bool) private cancelled;
     mapping(uint256 => bool) private claimed;
     mapping(uint256 => address) private highestBid;
@@ -72,11 +72,11 @@ contract Auction is Ownable, ReentrancyGuard {
 
     /// @notice Returns a struct with an auction's details
     /// @param auctionId the index of the auction being queried
-    /// @return an "Auction" struct with the details of the auction requested
+    /// @return an "AuctionInfo" struct with the details of the auction requested
     function getAuctionDetails(uint256 auctionId)
         external
         view
-        returns (Auction memory)
+        returns (AuctionInfo memory)
     {
         require(
             auctionId <= _auctionId.current() && auctionId > 0,
@@ -188,7 +188,7 @@ contract Auction is Ownable, ReentrancyGuard {
         _auctionId.increment();
         uint256 auctionId = _auctionId.current();
 
-        auctions[auctionId] = Auction({
+        auctions[auctionId] = AuctionInfo({
             id: auctionId,
             owner: msg.sender,
             nftContract: nftContract,
@@ -505,8 +505,7 @@ contract Auction is Ownable, ReentrancyGuard {
     }
 
     /// @notice allows contract to receive ERC1155 NFTs
-    function onERC1155Received(
-    ) external pure returns (bytes4) {
+    function onERC1155Received() external pure returns (bytes4) {
         // 0xf23a6e61 = bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)")
         return 0xf23a6e61;
     }
