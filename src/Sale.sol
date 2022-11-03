@@ -43,8 +43,8 @@ contract Sale is Ownable, ReentrancyGuard {
     );
 
     struct SaleInfo {
-        uint256 id; // id of sale
-        address owner; // address of NFT owner
+        uint256 id; 
+        address owner; 
         address nftContract;
         uint256 nftId;
         uint256 amount; // amount of NFTs being sold
@@ -66,7 +66,6 @@ contract Sale is Ownable, ReentrancyGuard {
         Registry = IRegistry(registry);
     }
 
-    /// @notice Returns a struct with an sale's details
     /// @param saleId the index of the sale being queried
     /// @return an "SaleInfo" struct with the details of the sale requested
     function getSaleDetails(uint256 saleId)
@@ -81,10 +80,6 @@ contract Sale is Ownable, ReentrancyGuard {
         return sales[saleId];
     }
 
-    /// @notice Returns the status of a particular sale
-    /// @dev statuses are: PENDING, CANCELLED, ACTIVE, ENDED
-    /// @param saleId the index of the sale being queried
-    /// @return a string of the sale's status
     function getSaleStatus(uint256 saleId) public view returns (string memory) {
         require(
             saleId <= _saleId.current() && saleId > 0,
@@ -105,11 +100,8 @@ contract Sale is Ownable, ReentrancyGuard {
         revert("error");
     }
 
-    /// @notice Returns the in-contract balance of a specific address for a specific token
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
-    /// @param account the address to query the balance of
-    /// @param token the address of the token to query the balance for
-    /// @return the uint256 balance of the token queired for the address queried
+    /// @return the uint256 in-contract balance of a specific address for a specific token
     function getClaimableBalance(address account, address token)
         external
         view
@@ -339,7 +331,6 @@ contract Sale is Ownable, ReentrancyGuard {
 
     /// @notice Withdraws in-contract balance of a particular token
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
-    /// @param tokenContract the address of the token to claim
     function claimFunds(address tokenContract) external {
         require(
             claimableFunds[msg.sender][tokenContract] > 0,
