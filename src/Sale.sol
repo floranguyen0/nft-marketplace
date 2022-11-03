@@ -23,7 +23,7 @@ contract Sale is Ownable, ReentrancyGuard {
     Counters.Counter private _saleId;
     IRegistry private Registry;
 
-    event NewSale(uint256 indexed id, SaleInfo newSale);
+    event SaleCreated(uint256 indexed id, SaleInfo newSale);
     event SaleCancelled(uint256 indexed saleId);
     event Purchase(
         uint256 indexed saleId,
@@ -160,7 +160,7 @@ contract Sale is Ownable, ReentrancyGuard {
 
         NftContract.safeTransferFrom(msg.sender, address(this), id, amount, "");
 
-        emit NewSale(saleId, sales[saleId]);
+        emit SaleCreated(saleId, sales[saleId]);
 
         return saleId;
     }
