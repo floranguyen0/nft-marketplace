@@ -374,11 +374,6 @@ contract Sale is Ownable, ReentrancyGuard {
 
     /// @notice allows contract to receive ERC1155 NFTs
     function onERC1155Received(
-        address operator,
-        address from,
-        uint256 id,
-        uint256 value,
-        bytes memory data
     ) external pure returns (bytes4) {
         // 0xf23a6e61 = bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)")
         return 0xf23a6e61;
