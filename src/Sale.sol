@@ -26,9 +26,9 @@ contract Sale is Ownable, ReentrancyGuard {
     event NewSale(uint256 indexed id, SaleInfo newSale);
     event SaleCancelled(uint256 indexed saleId);
     event Purchase(
-        uint256 saleId,
-        address purchaser,
-        address recipient,
+        uint256 indexed saleId,
+        address indexed purchaser,
+        address indexed recipient,
         uint256 quantity
     );
     event NFTsReclaimed(
@@ -43,8 +43,8 @@ contract Sale is Ownable, ReentrancyGuard {
     );
 
     struct SaleInfo {
-        uint256 id; 
-        address owner; 
+        uint256 id;
+        address owner;
         address nftContract;
         uint256 nftId;
         uint256 amount; // amount of NFTs being sold
@@ -373,8 +373,7 @@ contract Sale is Ownable, ReentrancyGuard {
     }
 
     /// @notice allows contract to receive ERC1155 NFTs
-    function onERC1155Received(
-    ) external pure returns (bytes4) {
+    function onERC1155Received() external pure returns (bytes4) {
         // 0xf23a6e61 = bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)")
         return 0xf23a6e61;
     }
