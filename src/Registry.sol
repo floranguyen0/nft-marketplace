@@ -17,19 +17,36 @@ contract Registry is IRegistry, Ownable {
     uint256 scale = 1e4;
 
     constructor() {
-        approvedCurrencies[address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa)] = true;
+        approvedCurrencies[
+            address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa)
+        ] = true;
     }
 
-    function isPlatformContract(address toCheck) external view override returns (bool) {
+    function isPlatformContract(address toCheck)
+        external
+        view
+        override
+        returns (bool)
+    {
         return platformContracts[toCheck];
     }
 
-    function isApprovedCurrency(address tokenContract) external view override returns (bool) {
+    function isApprovedCurrency(address tokenContract)
+        external
+        view
+        override
+        returns (bool)
+    {
         if (allowAllCurrencies) return true;
         return approvedCurrencies[tokenContract];
     }
 
-    function feeInfo(uint256 _salePrice) external view override returns (address, uint256) {
+    function feeInfo(uint256 _salePrice)
+        external
+        view
+        override
+        returns (address, uint256)
+    {
         return (systemWallet, ((_salePrice * fee) / scale));
     }
 
@@ -39,13 +56,21 @@ contract Registry is IRegistry, Ownable {
         emit SystemWalletUpdated(newWallet);
     }
 
-    function setFeeVariables(uint256 newFee, uint256 newScale) external override onlyOwner {
+    function setFeeVariables(uint256 newFee, uint256 newScale)
+        external
+        override
+        onlyOwner
+    {
         fee = newFee;
         scale = newScale;
         emit FeeVariablesChanged(newFee, newScale);
     }
 
-    function setContractStatus(address toChange, bool status) external override onlyOwner {
+    function setContractStatus(address toChange, bool status)
+        external
+        override
+        onlyOwner
+    {
         string memory boolString = status == true ? "true" : "false";
         require(
             platformContracts[toChange] != status,
@@ -55,7 +80,11 @@ contract Registry is IRegistry, Ownable {
         emit ContractStatusChanged(toChange, status);
     }
 
-    function setCurrencyStatus(address tokenContract, bool status) external override onlyOwner {
+    function setCurrencyStatus(address tokenContract, bool status)
+        external
+        override
+        onlyOwner
+    {
         require(!allowAllCurrencies, "all currencies approved");
         string memory boolString = status == true ? "true" : "false";
         require(

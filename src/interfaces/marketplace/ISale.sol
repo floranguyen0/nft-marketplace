@@ -18,9 +18,22 @@ interface ISale {
 
     event NewSale(uint256 indexed id, Sale newSale);
     event SaleCancelled(uint256 indexed saleId);
-    event Purchase(uint256 saleId, address purchaser, address recipient, uint256 quantity);
-    event NFTsReclaimed(uint256 indexed id, address indexed owner, uint256 indexed amount);
-    event BalanceUpdated(address indexed accountOf, address indexed tokenAddress, uint256 indexed newBalance);
+    event Purchase(
+        uint256 saleId,
+        address purchaser,
+        address recipient,
+        uint256 quantity
+    );
+    event NFTsReclaimed(
+        uint256 indexed id,
+        address indexed owner,
+        uint256 indexed amount
+    );
+    event BalanceUpdated(
+        address indexed accountOf,
+        address indexed tokenAddress,
+        uint256 indexed newBalance
+    );
 
     /// @notice Returns a struct with an sale's details
     /// @param saleId the index of the sale being queried
@@ -31,14 +44,20 @@ interface ISale {
     /// @dev statuses are: PENDING, CANCELLED, ACTIVE, ENDED
     /// @param saleId the index of the sale being queried
     /// @return a string of the sale's status
-    function getSaleStatus(uint256 saleId) external view returns (string memory);
+    function getSaleStatus(uint256 saleId)
+        external
+        view
+        returns (string memory);
 
     /// @notice Returns the in-contract balance of a specific address for a specific token
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     /// @param account the address to query the balance of
     /// @param token the address of the token to query the balance for
     /// @return the uint256 balance of the token queired for the address queried
-    function getClaimableBalance(address account, address token) external view returns (uint256);
+    function getClaimableBalance(address account, address token)
+        external
+        view
+        returns (uint256);
 
     /// @notice Creates a sale of ERC1155 NFTs
     /// @dev NFT contract must be ERC2981-compliant and recognized by Registry

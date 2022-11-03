@@ -9,9 +9,15 @@ import "./interfaces/marketplace/IAuction.sol";
 import "./interfaces/marketplace/IRegistry.sol";
 
 interface INFT {
-    function royaltyInfo(uint256 id, uint256 _salePrice) external view returns (address, uint256);
+    function royaltyInfo(uint256 id, uint256 _salePrice)
+        external
+        view
+        returns (address, uint256);
 
-    function balanceOf(address account, uint256 id) external view returns (uint256);
+    function balanceOf(address account, uint256 id)
+        external
+        view
+        returns (uint256);
 
     function safeTransferFrom(
         address from,
@@ -54,35 +60,65 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
     }
 
     /// @inheritdoc IAuction
-    function getAuctionDetails(uint256 auctionId) external view returns (Auction memory) {
-        require(auctionId <= _auctionId.current() && auctionId > 0, "auction does not exist");
+    function getAuctionDetails(uint256 auctionId)
+        external
+        view
+        returns (Auction memory)
+    {
+        require(
+            auctionId <= _auctionId.current() && auctionId > 0,
+            "auction does not exist"
+        );
         return auctions[auctionId];
     }
 
     /// @inheritdoc IAuction
-    function getAuctionStatus(uint256 auctionId) public view override returns (string memory) {
-        require(auctionId <= _auctionId.current() && auctionId > 0, "auction does not exist");
-        if (cancelled[auctionId] || !Registry.isPlatformContract(address(this))) return "CANCELLED";
+    function getAuctionStatus(uint256 auctionId)
+        public
+        view
+        override
+        returns (string memory)
+    {
+        require(
+            auctionId <= _auctionId.current() && auctionId > 0,
+            "auction does not exist"
+        );
+        if (cancelled[auctionId] || !Registry.isPlatformContract(address(this)))
+            return "CANCELLED";
         if (claimed[auctionId]) return "ENDED & CLAIMED";
         if (block.timestamp < auctions[auctionId].startTime) return "PENDING";
-        if (block.timestamp >= auctions[auctionId].startTime && block.timestamp < auctions[auctionId].endTime)
-            return "ACTIVE";
+        if (
+            block.timestamp >= auctions[auctionId].startTime &&
+            block.timestamp < auctions[auctionId].endTime
+        ) return "ACTIVE";
         if (block.timestamp > auctions[auctionId].endTime) return "ENDED";
         revert("error");
     }
 
     /// @inheritdoc IAuction
-    function getClaimableBalance(address account, address token) external view returns (uint256) {
+    function getClaimableBalance(address account, address token)
+        external
+        view
+        returns (uint256)
+    {
         return claimableFunds[account][token];
     }
 
     /// @inheritdoc IAuction
-    function getBidDetails(uint256 auctionId, address bidder) external view returns (Bid memory) {
+    function getBidDetails(uint256 auctionId, address bidder)
+        external
+        view
+        returns (Bid memory)
+    {
         return bids[auctionId][bidder];
     }
 
     /// @inheritdoc IAuction
-    function getHighestBidder(uint256 auctionId) external view returns (address) {
+    function getHighestBidder(uint256 auctionId)
+        external
+        view
+        returns (address)
+    {
         return highestBid[auctionId];
     }
 
@@ -96,10 +132,22 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
         address currency
     ) external nonReentrant returns (uint256) {
         INFT NftContract = INFT(nftContract);
-        require(Registry.isPlatformContract(nftContract) == true, "NFT not in approved contract");
-        require(Registry.isPlatformContract(address(this)) == true, "This contract is deprecated");
-        require(Registry.isApprovedCurrency(currency) == true, "currency not supported");
-        require(NftContract.supportsInterface(0x2a55205a), "contract must support ERC2981");
+        require(
+            Registry.isPlatformContract(nftContract) == true,
+            "NFT not in approved contract"
+        );
+        require(
+            Registry.isPlatformContract(address(this)) == true,
+            "This contract is deprecated"
+        );
+        require(
+            Registry.isApprovedCurrency(currency) == true,
+            "currency not supported"
+        );
+        require(
+            NftContract.supportsInterface(0x2a55205a),
+            "contract must support ERC2981"
+        );
         require(NftContract.balanceOf(msg.sender, id) > 0, "does not own NFT");
         require(endTime > startTime, "error in start/end params");
 
@@ -130,15 +178,32 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
         uint256 amountFromBalance,
         uint256 externalFunds
     ) external payable nonReentrant returns (bool) {
-        require(Registry.isPlatformContract(address(this)) == true, "This contract is deprecated");
-        require(keccak256(bytes(getAuctionStatus(auctionId))) == keccak256(bytes("ACTIVE")), "auction is not active");
+        require(
+            Registry.isPlatformContract(address(this)) == true,
+            "This contract is deprecated"
+        );
+        require(
+            keccak256(bytes(getAuctionStatus(auctionId))) ==
+                keccak256(bytes("ACTIVE")),
+            "auction is not active"
+        );
         uint256 totalAmount = amountFromBalance +
             externalFunds +
             // this allows the top bidder to top off their bid
             bids[auctionId][msg.sender].amount;
-        require(totalAmount > bids[auctionId][highestBid[auctionId]].amount, "bid not high enough");
-        require(totalAmount >= auctions[auctionId].reservePrice, "bid is lower than reserve price");
-        require(amountFromBalance <= claimableFunds[msg.sender][auctions[auctionId].currency], "not enough balance");
+        require(
+            totalAmount > bids[auctionId][highestBid[auctionId]].amount,
+            "bid not high enough"
+        );
+        require(
+            totalAmount >= auctions[auctionId].reservePrice,
+            "bid is lower than reserve price"
+        );
+        require(
+            amountFromBalance <=
+                claimableFunds[msg.sender][auctions[auctionId].currency],
+            "not enough balance"
+        );
 
         if (auctions[auctionId].currency != ETH) {
             IERC20 Token = IERC20(auctions[auctionId].currency);
@@ -147,7 +212,8 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
         } else {
             require(msg.value == externalFunds, "mismatch of value and args");
             require(
-                msg.value + amountFromBalance > bids[auctionId][highestBid[auctionId]].amount,
+                msg.value + amountFromBalance >
+                    bids[auctionId][highestBid[auctionId]].amount,
                 "insufficient ETH sent"
             );
         }
@@ -164,7 +230,9 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
 
         if (lastBidder != msg.sender) {
             bids[auctionId][lastBidder].amount = 0;
-            claimableFunds[lastBidder][auctions[auctionId].currency] += lastAmount;
+            claimableFunds[lastBidder][
+                auctions[auctionId].currency
+            ] += lastAmount;
             emit BalanceUpdated(
                 lastBidder,
                 auctions[auctionId].currency,
@@ -172,8 +240,14 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
             );
         }
         if (amountFromBalance > 0) {
-            claimableFunds[msg.sender][auctions[auctionId].currency] -= amountFromBalance;
-            emit BalanceUpdated(msg.sender, auctions[auctionId].currency, amountFromBalance);
+            claimableFunds[msg.sender][
+                auctions[auctionId].currency
+            ] -= amountFromBalance;
+            emit BalanceUpdated(
+                msg.sender,
+                auctions[auctionId].currency,
+                amountFromBalance
+            );
         }
         bids[auctionId][msg.sender].amount = totalAmount;
         bids[auctionId][msg.sender].timestamp = block.timestamp;
@@ -186,11 +260,19 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
     }
 
     /// @inheritdoc IAuction
-    function claimNft(uint256 auctionId, address recipient) external returns (bool) {
-        require(msg.sender == highestBid[auctionId] || msg.sender == auctions[auctionId].owner, "cannot claim nft");
+    function claimNft(uint256 auctionId, address recipient)
+        external
+        returns (bool)
+    {
+        require(
+            msg.sender == highestBid[auctionId] ||
+                msg.sender == auctions[auctionId].owner,
+            "cannot claim nft"
+        );
         bytes32 status = keccak256(bytes(getAuctionStatus(auctionId)));
         require(
-            status == keccak256(bytes("CANCELLED")) || status == keccak256(bytes("ENDED")),
+            status == keccak256(bytes("CANCELLED")) ||
+                status == keccak256(bytes("ENDED")),
             "nft not available for claiming"
         );
         INFT Nft = INFT(auctions[auctionId].nftContract);
@@ -198,15 +280,20 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
             ? 0
             : bids[auctionId][highestBid[auctionId]].amount;
         if (msg.sender == highestBid[auctionId]) {
-            require(block.timestamp > auctions[auctionId].endTime, "cannot claim from auction");
             require(
-                bids[auctionId][highestBid[auctionId]].amount >= auctions[auctionId].reservePrice,
+                block.timestamp > auctions[auctionId].endTime,
+                "cannot claim from auction"
+            );
+            require(
+                bids[auctionId][highestBid[auctionId]].amount >=
+                    auctions[auctionId].reservePrice,
                 "reserve price not met"
             );
         } else if (msg.sender == auctions[auctionId].owner) {
             require(
                 cancelled[auctionId] ||
-                    (bids[auctionId][highestBid[auctionId]].amount < auctions[auctionId].reservePrice &&
+                    (bids[auctionId][highestBid[auctionId]].amount <
+                        auctions[auctionId].reservePrice &&
                         block.timestamp > auctions[auctionId].endTime),
                 "owner cannot reclaim nft"
             );
@@ -217,17 +304,31 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
             _nftPayment(auctionId, totalFundsToPay, Nft);
         }
 
-        Nft.safeTransferFrom(address(this), recipient, auctions[auctionId].nftId, 1, "");
+        Nft.safeTransferFrom(
+            address(this),
+            recipient,
+            auctions[auctionId].nftId,
+            1,
+            ""
+        );
         claimed[auctionId] = true;
 
-        emit ClaimNFT(auctions[auctionId].nftId, msg.sender, recipient, bids[auctionId][highestBid[auctionId]].amount);
+        emit ClaimNFT(
+            auctions[auctionId].nftId,
+            msg.sender,
+            recipient,
+            bids[auctionId][highestBid[auctionId]].amount
+        );
 
         return true;
     }
 
     /// @inheritdoc IAuction
     function claimFunds(address tokenContract) external {
-        require(claimableFunds[msg.sender][tokenContract] > 0, "nothing to claim");
+        require(
+            claimableFunds[msg.sender][tokenContract] > 0,
+            "nothing to claim"
+        );
         uint256 payout = claimableFunds[msg.sender][tokenContract];
         if (tokenContract != ETH) {
             IERC20 Token = IERC20(tokenContract);
@@ -238,18 +339,32 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
             (bool success, ) = msg.sender.call{value: payout}("");
             require(success, "ETH payout failed");
         }
-        emit BalanceUpdated(msg.sender, tokenContract, claimableFunds[msg.sender][tokenContract]);
+        emit BalanceUpdated(
+            msg.sender,
+            tokenContract,
+            claimableFunds[msg.sender][tokenContract]
+        );
     }
 
     /// @inheritdoc IAuction
     function resolveAuction(uint256 auctionId) external onlyOwner {
-        require(keccak256(bytes(getAuctionStatus(auctionId))) == keccak256(bytes("ENDED")), "can only resolve ENDED");
+        require(
+            keccak256(bytes(getAuctionStatus(auctionId))) ==
+                keccak256(bytes("ENDED")),
+            "can only resolve ENDED"
+        );
         uint256 winningBid = bids[auctionId][highestBid[auctionId]].amount;
         require(winningBid > 0, "no bids: cannot resolve");
         INFT Nft = INFT(auctions[auctionId].nftContract);
         _nftPayment(auctionId, winningBid, Nft);
 
-        Nft.safeTransferFrom(address(this), highestBid[auctionId], auctions[auctionId].nftId, 1, "");
+        Nft.safeTransferFrom(
+            address(this),
+            highestBid[auctionId],
+            auctions[auctionId].nftId,
+            1,
+            ""
+        );
         claimed[auctionId] = true;
 
         emit ClaimNFT(
@@ -262,10 +377,15 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
 
     /// @inheritdoc IAuction
     function cancelAuction(uint256 auctionId) external {
-        require(msg.sender == auctions[auctionId].owner || msg.sender == owner(), "only owner or sale creator");
         require(
-            keccak256(bytes(getAuctionStatus(auctionId))) == keccak256(bytes("ACTIVE")) ||
-                keccak256(bytes(getAuctionStatus(auctionId))) == keccak256(bytes("PENDING")),
+            msg.sender == auctions[auctionId].owner || msg.sender == owner(),
+            "only owner or sale creator"
+        );
+        require(
+            keccak256(bytes(getAuctionStatus(auctionId))) ==
+                keccak256(bytes("ACTIVE")) ||
+                keccak256(bytes(getAuctionStatus(auctionId))) ==
+                keccak256(bytes("PENDING")),
             "must be active or pending"
         );
         cancelled[auctionId] = true;
@@ -274,7 +394,9 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
         uint256 _highestBid = bids[auctionId][highestBidder].amount;
 
         escrow[auctions[auctionId].currency] -= _highestBid;
-        claimableFunds[highestBidder][auctions[auctionId].currency] += _highestBid;
+        claimableFunds[highestBidder][
+            auctions[auctionId].currency
+        ] += _highestBid;
         emit BalanceUpdated(
             highestBidder,
             auctions[auctionId].currency,
@@ -291,7 +413,10 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
     ) internal {
         escrow[auctions[auctionId].currency] -= fundsToPay;
         // if this is from successful auction
-        (address artistAddress, uint256 royalties) = Nft.royaltyInfo(auctions[auctionId].nftId, fundsToPay);
+        (address artistAddress, uint256 royalties) = Nft.royaltyInfo(
+            auctions[auctionId].nftId,
+            fundsToPay
+        );
 
         // system fee
         (address systemWallet, uint256 fee) = Registry.feeInfo(fundsToPay);
@@ -306,7 +431,9 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
         // artist royalty if artist isn't the seller
         if (auctions[auctionId].owner != artistAddress) {
             fundsToPay -= royalties;
-            claimableFunds[artistAddress][auctions[auctionId].currency] += royalties;
+            claimableFunds[artistAddress][
+                auctions[auctionId].currency
+            ] += royalties;
             emit BalanceUpdated(
                 artistAddress,
                 auctions[auctionId].currency,
@@ -315,11 +442,15 @@ contract Auction is IAuction, Ownable, ReentrancyGuard {
         }
 
         // seller gains
-        claimableFunds[auctions[auctionId].owner][auctions[auctionId].currency] += fundsToPay;
+        claimableFunds[auctions[auctionId].owner][
+            auctions[auctionId].currency
+        ] += fundsToPay;
         emit BalanceUpdated(
             auctions[auctionId].owner,
             auctions[auctionId].currency,
-            claimableFunds[auctions[auctionId].owner][auctions[auctionId].currency]
+            claimableFunds[auctions[auctionId].owner][
+                auctions[auctionId].currency
+            ]
         );
     }
 

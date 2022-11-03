@@ -11,7 +11,10 @@ interface IRegistry {
     /// @dev structured similar to ERC2981
     /// @param _salePrice the uint256 amount being paid
     /// @return the address of the sustem wallet and the uint256 amount of fees to pay
-    function feeInfo(uint256 _salePrice) external view returns (address, uint256);
+    function feeInfo(uint256 _salePrice)
+        external
+        view
+        returns (address, uint256);
 
     /// @notice Returns if a contract is recognized by the registry
     /// @dev no validation is done to verify a contract exists at the address
@@ -24,7 +27,10 @@ interface IRegistry {
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     /// @param tokenContract the address of the token to check
     /// @return bool if the token is approved for use on the platform
-    function isApprovedCurrency(address tokenContract) external view returns (bool);
+    function isApprovedCurrency(address tokenContract)
+        external
+        view
+        returns (bool);
 
     /// @notice Sets the address of the platform's wallet (for fees)
     /// @param newWallet the address of the new platform wallet

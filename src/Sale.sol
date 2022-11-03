@@ -9,9 +9,15 @@ import "./interfaces/marketplace/ISale.sol";
 import "./interfaces/marketplace/IRegistry.sol";
 
 interface INFT {
-    function royaltyInfo(uint256 id, uint256 _salePrice) external view returns (address, uint256);
+    function royaltyInfo(uint256 id, uint256 _salePrice)
+        external
+        view
+        returns (address, uint256);
 
-    function balanceOf(address account, uint256 id) external view returns (uint256);
+    function balanceOf(address account, uint256 id)
+        external
+        view
+        returns (uint256);
 
     function safeTransferFrom(
         address from,
@@ -81,27 +87,50 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
     }
 
     /// @inheritdoc ISale
-    function getSaleDetails(uint256 saleId) external view returns (Sale memory) {
-        require(saleId <= _saleId.current() && saleId > 0, "sale does not exist");
+    function getSaleDetails(uint256 saleId)
+        external
+        view
+        returns (Sale memory)
+    {
+        require(
+            saleId <= _saleId.current() && saleId > 0,
+            "sale does not exist"
+        );
         return sales[saleId];
     }
 
     /// @inheritdoc ISale
-    function getSaleStatus(uint256 saleId) public view override returns (string memory) {
-        require(saleId <= _saleId.current() && saleId > 0, "sale does not exist");
-        if (cancelled[saleId] || !Registry.isPlatformContract(address(this))) return "CANCELLED";
+    function getSaleStatus(uint256 saleId)
+        public
+        view
+        override
+        returns (string memory)
+    {
+        require(
+            saleId <= _saleId.current() && saleId > 0,
+            "sale does not exist"
+        );
+        if (cancelled[saleId] || !Registry.isPlatformContract(address(this)))
+            return "CANCELLED";
         if (block.timestamp < sales[saleId].startTime) return "PENDING";
         if (
             block.timestamp >= sales[saleId].startTime &&
             block.timestamp < sales[saleId].endTime &&
             sales[saleId].purchased < sales[saleId].amount
         ) return "ACTIVE";
-        if (block.timestamp >= sales[saleId].endTime || sales[saleId].purchased == sales[saleId].amount) return "ENDED";
+        if (
+            block.timestamp >= sales[saleId].endTime ||
+            sales[saleId].purchased == sales[saleId].amount
+        ) return "ENDED";
         revert("error");
     }
 
     /// @inheritdoc ISale
-    function getClaimableBalance(address account, address token) external view returns (uint256) {
+    function getClaimableBalance(address account, address token)
+        external
+        view
+        returns (uint256)
+    {
         return claimableFunds[account][token];
     }
 
@@ -117,11 +146,26 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         address currency
     ) external nonReentrant returns (uint256) {
         INFT NftContract = INFT(nftContract);
-        require(Registry.isPlatformContract(nftContract) == true, "NFT not in approved contract");
-        require(Registry.isPlatformContract(address(this)) == true, "This contract is deprecated");
-        require(Registry.isApprovedCurrency(currency) == true, "currency not supported");
-        require(NftContract.supportsInterface(0x2a55205a), "contract must support ERC2981");
-        require(NftContract.balanceOf(msg.sender, id) >= amount, "insufficient NFT balance");
+        require(
+            Registry.isPlatformContract(nftContract) == true,
+            "NFT not in approved contract"
+        );
+        require(
+            Registry.isPlatformContract(address(this)) == true,
+            "This contract is deprecated"
+        );
+        require(
+            Registry.isApprovedCurrency(currency) == true,
+            "currency not supported"
+        );
+        require(
+            NftContract.supportsInterface(0x2a55205a),
+            "contract must support ERC2981"
+        );
+        require(
+            NftContract.balanceOf(msg.sender, id) >= amount,
+            "insufficient NFT balance"
+        );
         require(endTime > startTime, "error in start/end params");
         require(maxBuyAmount > 0, "maxBuyAmount must be non-zero");
         _saleId.increment();
@@ -155,53 +199,108 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
         uint256 amountToBuy,
         uint256 amountFromBalance
     ) external payable nonReentrant returns (bool) {
-        require(Registry.isPlatformContract(address(this)) == true, "This contract is deprecated");
-        require(keccak256(bytes(getSaleStatus(saleId))) == keccak256(bytes("ACTIVE")), "sale is not active");
+        require(
+            Registry.isPlatformContract(address(this)) == true,
+            "This contract is deprecated"
+        );
+        require(
+            keccak256(bytes(getSaleStatus(saleId))) ==
+                keccak256(bytes("ACTIVE")),
+            "sale is not active"
+        );
         Sale memory currentSale = sales[saleId];
-        require(purchased[saleId][msg.sender] + amountToBuy <= currentSale.maxBuyAmount, "buy quantity too high");
-        require(amountToBuy <= currentSale.amount - currentSale.purchased, "not enough stock for purchase");
+        require(
+            purchased[saleId][msg.sender] + amountToBuy <=
+                currentSale.maxBuyAmount,
+            "buy quantity too high"
+        );
+        require(
+            amountToBuy <= currentSale.amount - currentSale.purchased,
+            "not enough stock for purchase"
+        );
         address currency = currentSale.currency;
-        require(amountFromBalance <= claimableFunds[msg.sender][currency], "not enough balance");
+        require(
+            amountFromBalance <= claimableFunds[msg.sender][currency],
+            "not enough balance"
+        );
 
         uint256 nftId = currentSale.nftId;
 
         INFT Nft = INFT(currentSale.nftContract);
-        (address artistAddress, uint256 royalties) = Nft.royaltyInfo(nftId, amountToBuy * currentSale.price);
+        (address artistAddress, uint256 royalties) = Nft.royaltyInfo(
+            nftId,
+            amountToBuy * currentSale.price
+        );
 
         if (currency != ETH) {
             IERC20 Token = IERC20(currency);
 
-            Token.safeTransferFrom(msg.sender, address(this), (amountToBuy * currentSale.price) - amountFromBalance);
+            Token.safeTransferFrom(
+                msg.sender,
+                address(this),
+                (amountToBuy * currentSale.price) - amountFromBalance
+            );
         } else {
-            require(msg.value == (amountToBuy * currentSale.price) - amountFromBalance, "msg.value + balance != price");
+            require(
+                msg.value ==
+                    (amountToBuy * currentSale.price) - amountFromBalance,
+                "msg.value + balance != price"
+            );
         }
         if (amountFromBalance > 0) {
             claimableFunds[msg.sender][currency] -= amountFromBalance;
-            emit BalanceUpdated(msg.sender, currency, claimableFunds[msg.sender][currency]);
+            emit BalanceUpdated(
+                msg.sender,
+                currency,
+                claimableFunds[msg.sender][currency]
+            );
         }
 
         // system fee
-        (address systemWallet, uint256 fee) = Registry.feeInfo(amountToBuy * currentSale.price);
+        (address systemWallet, uint256 fee) = Registry.feeInfo(
+            amountToBuy * currentSale.price
+        );
         claimableFunds[systemWallet][currency] += fee;
-        emit BalanceUpdated(systemWallet, currency, claimableFunds[systemWallet][currency]);
+        emit BalanceUpdated(
+            systemWallet,
+            currency,
+            claimableFunds[systemWallet][currency]
+        );
 
         // artist royalty if artist isn't the seller
         if (currentSale.owner != artistAddress) {
             claimableFunds[artistAddress][currency] += royalties;
-            emit BalanceUpdated(artistAddress, currency, claimableFunds[artistAddress][currency]);
+            emit BalanceUpdated(
+                artistAddress,
+                currency,
+                claimableFunds[artistAddress][currency]
+            );
         } else {
             // since the artist is the seller
             royalties = 0;
         }
 
         // seller gains
-        claimableFunds[currentSale.owner][currency] += (amountToBuy * currentSale.price) - fee - royalties;
-        emit BalanceUpdated(currentSale.owner, currency, claimableFunds[currentSale.owner][currency]);
+        claimableFunds[currentSale.owner][currency] +=
+            (amountToBuy * currentSale.price) -
+            fee -
+            royalties;
+        emit BalanceUpdated(
+            currentSale.owner,
+            currency,
+            claimableFunds[currentSale.owner][currency]
+        );
 
         sales[saleId].purchased += amountToBuy;
         purchased[saleId][msg.sender] += amountToBuy;
 
-        Nft.safeTransferFrom(address(this), recipient, currentSale.nftId, amountToBuy, "");
+        Nft.safeTransferFrom(
+            address(this),
+            recipient,
+            currentSale.nftId,
+            amountToBuy,
+            ""
+        );
 
         emit Purchase(saleId, msg.sender, recipient, amountToBuy);
 
@@ -212,23 +311,36 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
     function claimNfts(uint256 saleId) external {
         bytes32 status = keccak256(bytes(getSaleStatus(saleId)));
         require(
-            status == keccak256(bytes("CANCELLED")) || status == keccak256(bytes("ENDED")),
+            status == keccak256(bytes("CANCELLED")) ||
+                status == keccak256(bytes("ENDED")),
             "cannot claim before sale closes"
         );
         require(msg.sender == sales[saleId].owner, "only nft owner can claim");
-        require(sales[saleId].purchased < sales[saleId].amount, "stock already sold or claimed");
+        require(
+            sales[saleId].purchased < sales[saleId].amount,
+            "stock already sold or claimed"
+        );
 
         uint256 stock = sales[saleId].amount - sales[saleId].purchased;
         sales[saleId].purchased = sales[saleId].amount;
         INFT Nft = INFT(sales[saleId].nftContract);
-        Nft.safeTransferFrom(address(this), sales[saleId].owner, sales[saleId].nftId, stock, "");
+        Nft.safeTransferFrom(
+            address(this),
+            sales[saleId].owner,
+            sales[saleId].nftId,
+            stock,
+            ""
+        );
 
         emit NFTsReclaimed(saleId, msg.sender, stock);
     }
 
     /// @inheritdoc ISale
     function claimFunds(address tokenContract) external {
-        require(claimableFunds[msg.sender][tokenContract] > 0, "nothing to claim");
+        require(
+            claimableFunds[msg.sender][tokenContract] > 0,
+            "nothing to claim"
+        );
         uint256 payout = claimableFunds[msg.sender][tokenContract];
         if (tokenContract != ETH) {
             IERC20 Token = IERC20(tokenContract);
@@ -239,15 +351,24 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
             (bool success, ) = msg.sender.call{value: payout}("");
             require(success, "ETH payout failed");
         }
-        emit BalanceUpdated(msg.sender, tokenContract, claimableFunds[msg.sender][tokenContract] = 0);
+        emit BalanceUpdated(
+            msg.sender,
+            tokenContract,
+            claimableFunds[msg.sender][tokenContract] = 0
+        );
     }
 
     /// @inheritdoc ISale
     function cancelSale(uint256 saleId) external {
-        require(msg.sender == sales[saleId].owner || msg.sender == owner(), "only owner or sale creator");
         require(
-            keccak256(bytes(getSaleStatus(saleId))) == keccak256(bytes("ACTIVE")) ||
-                keccak256(bytes(getSaleStatus(saleId))) == keccak256(bytes("PENDING")),
+            msg.sender == sales[saleId].owner || msg.sender == owner(),
+            "only owner or sale creator"
+        );
+        require(
+            keccak256(bytes(getSaleStatus(saleId))) ==
+                keccak256(bytes("ACTIVE")) ||
+                keccak256(bytes(getSaleStatus(saleId))) ==
+                keccak256(bytes("PENDING")),
             "must be active or pending"
         );
         cancelled[saleId] = true;
