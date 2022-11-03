@@ -39,22 +39,6 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
-    // already declared in ISale
-
-    // struct Sale {
-    //   uint256 id; // id of sale
-    //   address owner; // address of NFT owner
-    //   address nftContract;
-    //   uint256 nftId;
-    //   uint256 amount; // amount of NFTs being sold
-    //   uint256 purchased; // amount of NFTs purchased
-    //   uint256 startTime;
-    //   uint256 endTime;
-    //   uint256 price;
-    //   uint256 maxBuyAmount;
-    //   address currency; // use 0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa for ETH
-    // }
-
     // address alias for using ETH as a currency
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
 
@@ -66,21 +50,6 @@ contract Sale is ISale, Ownable, ReentrancyGuard {
     mapping(uint256 => mapping(address => uint256)) private purchased;
     // user address => tokenAddress => amount
     mapping(address => mapping(address => uint256)) private claimableFunds;
-
-    // already declared in ISale
-    // event NewSale(uint256 indexed id, Sale indexed newSale);
-    // event Purchase(
-    //   uint256 saleId,
-    //   address purchaser,
-    //   address recipient,
-    //   uint256 quantity
-    // );
-    // event NFTsReclaimed(uint256 indexed id, address indexed owner, uint256 indexed amount);
-    // event BalanceUpdated(
-    //   address indexed accountOf,
-    //   address indexed tokenAddress,
-    //   uint256 indexed newBalance
-    // );
 
     constructor(address registry) {
         Registry = IRegistry(registry);
