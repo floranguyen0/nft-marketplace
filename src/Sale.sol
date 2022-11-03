@@ -56,7 +56,8 @@ contract Sale is Ownable, ReentrancyGuard {
         address currency; // use zero address or 0xaaa for ETH
     }
 
-    mapping(uint256 => SaleInfo) private sales;
+    // saleId => SaleInfo
+    mapping(uint256 => SaleInfo) public sales;
     mapping(uint256 => bool) private cancelled;
     mapping(uint256 => mapping(address => uint256)) private purchased;
     // user address => tokenAddress => amount
@@ -64,20 +65,6 @@ contract Sale is Ownable, ReentrancyGuard {
 
     constructor(address registry) {
         Registry = IRegistry(registry);
-    }
-
-    /// @param saleId the index of the sale being queried
-    /// @return an "SaleInfo" struct with the details of the sale requested
-    function getSaleDetails(uint256 saleId)
-        external
-        view
-        returns (SaleInfo memory)
-    {
-        require(
-            saleId <= _saleId.current() && saleId > 0,
-            "sale does not exist"
-        );
-        return sales[saleId];
     }
 
     function getSaleStatus(uint256 saleId) public view returns (string memory) {
