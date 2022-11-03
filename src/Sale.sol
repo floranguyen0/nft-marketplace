@@ -59,9 +59,9 @@ contract Sale is Ownable, ReentrancyGuard {
     // saleId => SaleInfo
     mapping(uint256 => SaleInfo) public sales;
     mapping(uint256 => bool) private cancelled;
-    mapping(uint256 => mapping(address => uint256)) private purchased;
+    mapping(uint256 => mapping(address => uint256)) public purchased;
     // user address => tokenAddress => amount
-    mapping(address => mapping(address => uint256)) private claimableFunds;
+    mapping(address => mapping(address => uint256)) public claimableFunds;
 
     constructor(address registry) {
         Registry = IRegistry(registry);
