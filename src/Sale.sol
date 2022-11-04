@@ -70,7 +70,7 @@ contract Sale is Ownable, ReentrancyGuard {
     function getSaleStatus(uint256 saleId) public view returns (string memory) {
         require(
             saleId <= _saleId.current() && saleId > 0,
-            "sale does not exist"
+            "Sale does not exist"
         );
         if (cancelled[saleId] || !Registry.isPlatformContract(address(this)))
             return "CANCELLED";
@@ -83,7 +83,7 @@ contract Sale is Ownable, ReentrancyGuard {
             block.timestamp >= sales[saleId].endTime ||
             sales[saleId].purchased == sales[saleId].amount
         ) return "ENDED";
-        else revert("error");
+        else revert("Error");
     }
 
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
@@ -120,7 +120,7 @@ contract Sale is Ownable, ReentrancyGuard {
         INFT NftContract = INFT(nftContract);
         require(
             Registry.isPlatformContract(nftContract),
-            "NFT not in approved contract"
+            "NFT is not in approved contract"
         );
         require(
             Registry.isPlatformContract(address(this)),
@@ -128,18 +128,18 @@ contract Sale is Ownable, ReentrancyGuard {
         );
         require(
             Registry.isApprovedCurrency(currency),
-            "currency not supported"
+            "Currency is not supported"
         );
         require(
             NftContract.supportsInterface(0x2a55205a),
-            "contract must support ERC2981"
+            "Contract must support ERC2981"
         );
         require(
             NftContract.balanceOf(msg.sender, id) >= amount,
-            "insufficient NFT balance"
+            "Insufficient NFT balance"
         );
-        require(endTime > startTime, "error in start/end params");
-        require(maxBuyAmount > 0, "maxBuyAmount must be non-zero");
+        require(endTime > startTime, "Error in start/end params");
+        require(maxBuyAmount > 0, "MaxBuyAmount must be non-zero");
         _saleId.increment();
         uint256 saleId = _saleId.current();
 
@@ -184,22 +184,22 @@ contract Sale is Ownable, ReentrancyGuard {
         require(
             keccak256(bytes(getSaleStatus(saleId))) ==
                 keccak256(bytes("ACTIVE")),
-            "sale is not active"
+            "Sale is not active"
         );
         SaleInfo memory currentSale = sales[saleId];
         require(
             purchased[saleId][msg.sender] + amountToBuy <=
                 currentSale.maxBuyAmount,
-            "buy quantity too high"
+            "Buy quantity too high"
         );
         require(
             amountToBuy <= currentSale.amount - currentSale.purchased,
-            "not enough stock for purchase"
+            "Not enough stock for purchase"
         );
         address currency = currentSale.currency;
         require(
             amountFromBalance <= claimableFunds[msg.sender][currency],
-            "not enough balance"
+            "Not enough balance"
         );
 
         uint256 nftId = currentSale.nftId;
@@ -293,12 +293,12 @@ contract Sale is Ownable, ReentrancyGuard {
         require(
             status == keccak256(bytes("CANCELLED")) ||
                 status == keccak256(bytes("ENDED")),
-            "cannot claim before sale closes"
+            "Cannot claim before sale closes"
         );
-        require(msg.sender == sales[saleId].owner, "only nft owner can claim");
+        require(msg.sender == sales[saleId].owner, "Only nft owner can claim");
         require(
             sales[saleId].purchased < sales[saleId].amount,
-            "stock already sold or claimed"
+            "Stock already sold or claimed"
         );
 
         uint256 stock = sales[saleId].amount - sales[saleId].purchased;
@@ -320,7 +320,7 @@ contract Sale is Ownable, ReentrancyGuard {
     function claimFunds(address tokenContract) external {
         require(
             claimableFunds[msg.sender][tokenContract] > 0,
-            "nothing to claim"
+            "Nothing to claim"
         );
         uint256 payout = claimableFunds[msg.sender][tokenContract];
         if (tokenContract != ETH) {
@@ -344,14 +344,14 @@ contract Sale is Ownable, ReentrancyGuard {
     function cancelSale(uint256 saleId) external {
         require(
             msg.sender == sales[saleId].owner || msg.sender == owner(),
-            "only owner or sale creator"
+            "Only owner or sale creator"
         );
         require(
             keccak256(bytes(getSaleStatus(saleId))) ==
                 keccak256(bytes("ACTIVE")) ||
                 keccak256(bytes(getSaleStatus(saleId))) ==
                 keccak256(bytes("PENDING")),
-            "must be active or pending"
+            "Must be active or pending"
         );
         cancelled[saleId] = true;
 
