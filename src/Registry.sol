@@ -92,8 +92,9 @@ contract Registry is IRegistry, Ownable {
     }
 
     function approveAllCurrencies() external override onlyOwner {
-        require(!allowAllCurrencies, "Already approved");
-        allowAllCurrencies = true;
-        emit CurrencyStatusChanged(address(0), true);
+        if (!allowAllCurrencies) {
+            allowAllCurrencies = true;
+            emit CurrencyStatusChanged(address(0), true);
+        }
     }
 }
