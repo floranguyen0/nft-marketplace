@@ -41,13 +41,13 @@ contract Registry is IRegistry, Ownable {
         return approvedCurrencies[tokenContract];
     }
 
-    function feeInfo(uint256 _salePrice)
+    function feeInfo(uint256 salePrice)
         external
         view
         override
         returns (address, uint256)
     {
-        return (systemWallet, ((_salePrice * fee) / scale));
+        return (systemWallet, ((salePrice * fee) / scale));
     }
 
     function setSystemWallet(address newWallet) external override onlyOwner {
@@ -63,6 +63,7 @@ contract Registry is IRegistry, Ownable {
     {
         fee = newFee;
         scale = newScale;
+        
         emit FeeVariablesChanged(newFee, newScale);
     }
 
@@ -71,13 +72,10 @@ contract Registry is IRegistry, Ownable {
         override
         onlyOwner
     {
-        string memory boolString = status == true ? "true" : "false";
-        require(
-            platformContracts[toChange] != status,
-            string(abi.encodePacked("contract status is already ", boolString))
-        );
-        platformContracts[toChange] = status;
-        emit ContractStatusChanged(toChange, status);
+        if (platformContracts[toChange] != status) {
+            platformContracts[toChange] = status;
+            emit ContractStatusChanged(toChange, status);
+        }
     }
 
     function setCurrencyStatus(address tokenContract, bool status)
