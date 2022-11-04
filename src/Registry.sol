@@ -63,7 +63,7 @@ contract Registry is IRegistry, Ownable {
     {
         fee = newFee;
         scale = newScale;
-        
+
         emit FeeVariablesChanged(newFee, newScale);
     }
 
@@ -83,18 +83,16 @@ contract Registry is IRegistry, Ownable {
         override
         onlyOwner
     {
-        require(!allowAllCurrencies, "all currencies approved");
-        string memory boolString = status == true ? "true" : "false";
-        require(
-            approvedCurrencies[tokenContract] != status,
-            string(abi.encodePacked("token status is already ", boolString))
-        );
-        approvedCurrencies[tokenContract] = status;
-        emit CurrencyStatusChanged(tokenContract, status);
+        require(!allowAllCurrencies, "All currencies are approved");
+
+        if (approvedCurrencies[tokenContract] == status) {
+            approvedCurrencies[tokenContract] = status;
+            emit CurrencyStatusChanged(tokenContract, status);
+        }
     }
 
     function approveAllCurrencies() external override onlyOwner {
-        require(!allowAllCurrencies, "already approved");
+        require(!allowAllCurrencies, "Already approved");
         allowAllCurrencies = true;
         emit CurrencyStatusChanged(address(0), true);
     }
