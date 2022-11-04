@@ -74,17 +74,16 @@ contract Sale is Ownable, ReentrancyGuard {
         );
         if (cancelled[saleId] || !Registry.isPlatformContract(address(this)))
             return "CANCELLED";
-        if (block.timestamp < sales[saleId].startTime) return "PENDING";
-        if (
-            block.timestamp >= sales[saleId].startTime &&
+        else if (block.timestamp < sales[saleId].startTime) return "PENDING";
+        else if (
             block.timestamp < sales[saleId].endTime &&
             sales[saleId].purchased < sales[saleId].amount
         ) return "ACTIVE";
-        if (
+        else if (
             block.timestamp >= sales[saleId].endTime ||
             sales[saleId].purchased == sales[saleId].amount
         ) return "ENDED";
-        revert("error");
+        else revert("error");
     }
 
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
