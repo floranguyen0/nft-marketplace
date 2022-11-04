@@ -120,15 +120,15 @@ contract Sale is Ownable, ReentrancyGuard {
     ) external nonReentrant returns (uint256) {
         INFT NftContract = INFT(nftContract);
         require(
-            Registry.isPlatformContract(nftContract) == true,
+            Registry.isPlatformContract(nftContract),
             "NFT not in approved contract"
         );
         require(
-            Registry.isPlatformContract(address(this)) == true,
+            Registry.isPlatformContract(address(this)),
             "This contract is deprecated"
         );
         require(
-            Registry.isApprovedCurrency(currency) == true,
+            Registry.isApprovedCurrency(currency),
             "currency not supported"
         );
         require(
@@ -179,7 +179,7 @@ contract Sale is Ownable, ReentrancyGuard {
         uint256 amountFromBalance
     ) external payable nonReentrant returns (bool) {
         require(
-            Registry.isPlatformContract(address(this)) == true,
+            Registry.isPlatformContract(address(this)),
             "This contract is deprecated"
         );
         require(
