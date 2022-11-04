@@ -11,8 +11,7 @@ contract Registry is IRegistry, Ownable {
     mapping(address => bool) private approvedCurrencies;
     bool allowAllCurrencies;
     address systemWallet;
-    // scale: how many zeroes should follow the fee
-    // in the default values, there would be a 3% tax on a 18 decimal asset
+    // 3% tax on a 18 decimal asset
     uint256 fee = 300;
     uint256 scale = 1e4;
 
