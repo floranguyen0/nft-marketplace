@@ -21,34 +21,6 @@ contract Registry is IRegistry, Ownable {
         ] = true;
     }
 
-    function isPlatformContract(address toCheck)
-        external
-        view
-        override
-        returns (bool)
-    {
-        return platformContracts[toCheck];
-    }
-
-    function isApprovedCurrency(address tokenContract)
-        external
-        view
-        override
-        returns (bool)
-    {
-        if (allowAllCurrencies) return true;
-        return approvedCurrencies[tokenContract];
-    }
-
-    function feeInfo(uint256 salePrice)
-        external
-        view
-        override
-        returns (address, uint256)
-    {
-        return (systemWallet, ((salePrice * fee) / scale));
-    }
-
     function setSystemWallet(address newWallet) external override onlyOwner {
         systemWallet = newWallet;
 
@@ -95,5 +67,33 @@ contract Registry is IRegistry, Ownable {
             allowAllCurrencies = true;
             emit CurrencyStatusChanged(address(0), true);
         }
+    }
+
+    function isPlatformContract(address toCheck)
+        external
+        view
+        override
+        returns (bool)
+    {
+        return platformContracts[toCheck];
+    }
+
+    function isApprovedCurrency(address tokenContract)
+        external
+        view
+        override
+        returns (bool)
+    {
+        if (allowAllCurrencies) return true;
+        return approvedCurrencies[tokenContract];
+    }
+
+    function feeInfo(uint256 salePrice)
+        external
+        view
+        override
+        returns (address, uint256)
+    {
+        return (systemWallet, ((salePrice * fee) / scale));
     }
 }

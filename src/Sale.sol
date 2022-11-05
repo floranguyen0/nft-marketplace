@@ -67,35 +67,6 @@ contract Sale is Ownable, ReentrancyGuard {
         Registry = IRegistry(registry);
     }
 
-    function getSaleStatus(uint256 saleId) public view returns (string memory) {
-        require(
-            saleId <= _saleId.current() && saleId > 0,
-            "Sale does not exist"
-        );
-        if (cancelled[saleId] || !Registry.isPlatformContract(address(this)))
-            return "CANCELLED";
-        else if (block.timestamp < sales[saleId].startTime) return "PENDING";
-        else if (
-            block.timestamp < sales[saleId].endTime &&
-            sales[saleId].purchased < sales[saleId].amount
-        ) return "ACTIVE";
-        else if (
-            block.timestamp >= sales[saleId].endTime ||
-            sales[saleId].purchased == sales[saleId].amount
-        ) return "ENDED";
-        else revert("Error");
-    }
-
-    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
-    /// @return the uint256 in-contract balance of a specific address for a specific token
-    function getClaimableBalance(address account, address token)
-        external
-        view
-        returns (uint256)
-    {
-        return claimableFunds[account][token];
-    }
-
     /// @notice Creates a sale of ERC1155 NFTs
     /// @dev NFT contract must be ERC2981-compliant and recognized by Registry
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
@@ -362,5 +333,34 @@ contract Sale is Ownable, ReentrancyGuard {
     function onERC1155Received() external pure returns (bytes4) {
         // 0xf23a6e61 = bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)")
         return 0xf23a6e61;
+    }
+
+    function getSaleStatus(uint256 saleId) public view returns (string memory) {
+        require(
+            saleId <= _saleId.current() && saleId > 0,
+            "Sale does not exist"
+        );
+        if (cancelled[saleId] || !Registry.isPlatformContract(address(this)))
+            return "CANCELLED";
+        else if (block.timestamp < sales[saleId].startTime) return "PENDING";
+        else if (
+            block.timestamp < sales[saleId].endTime &&
+            sales[saleId].purchased < sales[saleId].amount
+        ) return "ACTIVE";
+        else if (
+            block.timestamp >= sales[saleId].endTime ||
+            sales[saleId].purchased == sales[saleId].amount
+        ) return "ENDED";
+        else revert("Error");
+    }
+
+    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
+    /// @return the uint256 in-contract balance of a specific address for a specific token
+    function getClaimableBalance(address account, address token)
+        external
+        view
+        returns (uint256)
+    {
+        return claimableFunds[account][token];
     }
 }
