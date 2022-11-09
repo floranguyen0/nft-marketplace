@@ -42,8 +42,6 @@ contract Sale is Ownable, ReentrancyGuard {
     );
 
     struct SaleInfo {
-        bool isERC721;
-        uint256 id;
         address owner;
         address nftContract;
         uint256 nftId;
@@ -55,8 +53,18 @@ contract Sale is Ownable, ReentrancyGuard {
         address currency; // use zero address or 0xaaa for ETH
     }
 
+    struct SaleInfoERC721 {
+        address nftContract;
+        uint256 nftId;
+        uint256 startTime;
+        uint256 endTime;
+        uint256 price;
+        address currency; // use zero address or 0xaaa for ETH
+    }
+
     // saleId => SaleInfo
     mapping(uint256 => SaleInfo) public sales;
+    mapping(uint256 => SaleInfoERC721) public salesERC721;
     mapping(uint256 => bool) private cancelled;
     mapping(uint256 => mapping(address => uint256)) public purchased;
     // user address => tokenAddress => amount
@@ -113,8 +121,6 @@ contract Sale is Ownable, ReentrancyGuard {
         uint256 saleId = _saleId.current();
 
         sales[saleId] = SaleInfo({
-            isERC721: false,
-            id: saleId,
             owner: msg.sender,
             nftContract: nftContract,
             nftId: id,
@@ -170,14 +176,9 @@ contract Sale is Ownable, ReentrancyGuard {
         _saleId.increment();
         uint256 saleId = _saleId.current();
 
-        sales[saleId] = SaleInfo({
-            isERC721: true,
-            amount: 1,
-            id: saleId,
-            owner: msg.sender,
+        salesERC721[saleId] = SaleInfoERC721({
             nftContract: nftContract,
             nftId: id,
-            purchased: 0,
             startTime: startTime,
             endTime: endTime,
             price: price,
