@@ -35,7 +35,7 @@ contract Sale is Ownable, ReentrancyGuard {
         address indexed owner,
         uint256 indexed amount
     );
-    event BalanceUpdated(
+    event ClaimFunds(
         address indexed accountOf,
         address indexed tokenAddress,
         uint256 indexed newBalance
@@ -243,11 +243,6 @@ contract Sale is Ownable, ReentrancyGuard {
         }
         if (amountFromBalance > 0) {
             claimableFunds[msg.sender][currency] -= amountFromBalance;
-            emit BalanceUpdated(
-                msg.sender,
-                currency,
-                claimableFunds[msg.sender][currency]
-            );
         }
 
         // system fee
@@ -255,20 +250,10 @@ contract Sale is Ownable, ReentrancyGuard {
             amountToBuy * currentSale.price
         );
         claimableFunds[systemWallet][currency] += fee;
-        emit BalanceUpdated(
-            systemWallet,
-            currency,
-            claimableFunds[systemWallet][currency]
-        );
 
         // artist royalty if artist isn't the seller
         if (currentSale.owner != artistAddress) {
             claimableFunds[artistAddress][currency] += royalties;
-            emit BalanceUpdated(
-                artistAddress,
-                currency,
-                claimableFunds[artistAddress][currency]
-            );
         } else {
             // since the artist is the seller
             royalties = 0;
@@ -279,11 +264,6 @@ contract Sale is Ownable, ReentrancyGuard {
             (amountToBuy * currentSale.price) -
             fee -
             royalties;
-        emit BalanceUpdated(
-            currentSale.owner,
-            currency,
-            claimableFunds[currentSale.owner][currency]
-        );
 
         sales[saleId].purchased += amountToBuy;
         purchased[saleId][msg.sender] += amountToBuy;
@@ -330,6 +310,7 @@ contract Sale is Ownable, ReentrancyGuard {
             currentSale.price
         );
 
+        // send the currency to the platform
         if (currency != ETH) {
             IERC20 Token = IERC20(currency);
 
@@ -346,11 +327,6 @@ contract Sale is Ownable, ReentrancyGuard {
         }
         if (amountFromBalance > 0) {
             claimableFunds[msg.sender][currency] -= amountFromBalance;
-            emit BalanceUpdated(
-                msg.sender,
-                currency,
-                claimableFunds[msg.sender][currency]
-            );
         }
 
         // system fee
@@ -358,20 +334,10 @@ contract Sale is Ownable, ReentrancyGuard {
             currentSale.price
         );
         claimableFunds[systemWallet][currency] += fee;
-        emit BalanceUpdated(
-            systemWallet,
-            currency,
-            claimableFunds[systemWallet][currency]
-        );
 
         // artist royalty if artist isn't the seller
         if (currentSale.owner != artistAddress) {
             claimableFunds[artistAddress][currency] += royalties;
-            emit BalanceUpdated(
-                artistAddress,
-                currency,
-                claimableFunds[artistAddress][currency]
-            );
         } else {
             // since the artist is the seller
             royalties = 0;
@@ -382,11 +348,6 @@ contract Sale is Ownable, ReentrancyGuard {
             currentSale.price -
             fee -
             royalties;
-        emit BalanceUpdated(
-            currentSale.owner,
-            currency,
-            claimableFunds[currentSale.owner][currency]
-        );
 
         purchased[saleId][msg.sender]++;
 
@@ -429,26 +390,23 @@ contract Sale is Ownable, ReentrancyGuard {
 
     /// @notice Withdraws in-contract balance of a particular token
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
-    function claimFunds(address tokenContract) external {
+    function claimFunds(address tokenAddress) external {
         require(
-            claimableFunds[msg.sender][tokenContract] > 0,
+            claimableFunds[msg.sender][tokenAddress] > 0,
             "Nothing to claim"
         );
-        uint256 payout = claimableFunds[msg.sender][tokenContract];
-        if (tokenContract != ETH) {
-            IERC20 Token = IERC20(tokenContract);
-            claimableFunds[msg.sender][tokenContract] = 0;
+        uint256 payout = claimableFunds[msg.sender][tokenAddress];
+        if (tokenAddress != ETH) {
+            IERC20 Token = IERC20(tokenAddress);
+            claimableFunds[msg.sender][tokenAddress] = 0;
             Token.safeTransfer(msg.sender, payout);
         } else {
-            claimableFunds[msg.sender][tokenContract] = 0;
+            claimableFunds[msg.sender][tokenAddress] = 0;
             (bool success, ) = msg.sender.call{value: payout}("");
             require(success, "ETH payout failed");
         }
-        emit BalanceUpdated(
-            msg.sender,
-            tokenContract,
-            claimableFunds[msg.sender][tokenContract] = 0
-        );
+
+        emit ClaimFunds(msg.sender, tokenAddress, newBalance);
     }
 
     /// @notice Allows contract owner or seller to cancel a pending or active sale
