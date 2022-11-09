@@ -53,7 +53,6 @@ contract Sale is Ownable, ReentrancyGuard {
         uint256 startTime;
         uint256 endTime;
         uint256 price;
-        uint256 maxBuyAmount;
         address currency; // use zero address or 0xaaa for ETH
     }
 
@@ -76,7 +75,6 @@ contract Sale is Ownable, ReentrancyGuard {
     /// @param startTime uint256 timestamp when the sale should commence
     /// @param endTime uint256 timestamp when sale should end
     /// @param price the price for each NFT
-    /// @param maxBuyAmount the maximum amount one address can purchase
     /// @param currency address of the token bids should be made in
     /// @return the index of the sale being created
     function createSale(
@@ -86,7 +84,6 @@ contract Sale is Ownable, ReentrancyGuard {
         uint256 startTime,
         uint256 endTime,
         uint256 price,
-        uint256 maxBuyAmount,
         address currency
     ) external nonReentrant returns (uint256) {
         INFT NftContract = INFT(nftContract);
@@ -111,7 +108,6 @@ contract Sale is Ownable, ReentrancyGuard {
             "Insufficient NFT balance"
         );
         require(endTime > startTime, "Error in start/end params");
-        require(maxBuyAmount > 0, "MaxBuyAmount must be non-zero");
         _saleId.increment();
         uint256 saleId = _saleId.current();
 
@@ -126,7 +122,6 @@ contract Sale is Ownable, ReentrancyGuard {
             startTime: startTime,
             endTime: endTime,
             price: price,
-            maxBuyAmount: maxBuyAmount,
             currency: currency
         });
 
@@ -143,7 +138,6 @@ contract Sale is Ownable, ReentrancyGuard {
         uint256 startTime,
         uint256 endTime,
         uint256 price,
-        uint256 maxBuyAmount,
         address currency
     ) external nonReentrant returns (uint256) {
         IERC721 NftContract = IERC721(nftContract);
@@ -169,7 +163,6 @@ contract Sale is Ownable, ReentrancyGuard {
             "The caller is not the nft owner"
         );
         require(endTime > startTime, "Error in start/end params");
-        require(maxBuyAmount > 0, "MaxBuyAmount must be non-zero");
         _saleId.increment();
         uint256 saleId = _saleId.current();
 
@@ -184,7 +177,6 @@ contract Sale is Ownable, ReentrancyGuard {
             startTime: startTime,
             endTime: endTime,
             price: price,
-            maxBuyAmount: maxBuyAmount,
             currency: currency
         });
 
@@ -217,11 +209,6 @@ contract Sale is Ownable, ReentrancyGuard {
             "Sale is not active"
         );
         SaleInfo memory currentSale = sales[saleId];
-        require(
-            purchased[saleId][msg.sender] + amountToBuy <=
-                currentSale.maxBuyAmount,
-            "Buy quantity too high"
-        );
         require(
             amountToBuy <= currentSale.amount - currentSale.purchased,
             "Not enough stock for purchase"
