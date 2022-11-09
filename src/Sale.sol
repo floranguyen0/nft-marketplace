@@ -43,6 +43,7 @@ contract Sale is Ownable, ReentrancyGuard {
     );
 
     struct SaleInfo {
+        bool isERC721;
         uint256 id;
         address owner;
         address nftContract;
@@ -115,6 +116,7 @@ contract Sale is Ownable, ReentrancyGuard {
         uint256 saleId = _saleId.current();
 
         sales[saleId] = SaleInfo({
+            isERC721: false,
             id: saleId,
             owner: msg.sender,
             nftContract: nftContract,
@@ -130,6 +132,63 @@ contract Sale is Ownable, ReentrancyGuard {
 
         NftContract.safeTransferFrom(msg.sender, address(this), id, amount, "");
 
+        emit SaleCreated(saleId, sales[saleId]);
+
+        return saleId;
+    }
+
+    function createSaleERC721(
+        address nftContract,
+        uint256 id,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 price,
+        uint256 maxBuyAmount,
+        address currency
+    ) external nonReentrant returns (uint256) {
+        IERC721 NftContract = IERC721(nftContract);
+        require(
+            Registry.isPlatformContract(nftContract),
+            "NFT is not in approved contract"
+        );
+        require(
+            Registry.isPlatformContract(address(this)),
+            "This contract is deprecated"
+        );
+        require(
+            Registry.isApprovedCurrency(currency),
+            "Currency is not supported"
+        );
+        require(
+            NftContract.supportsInterface(0x2a55205a),
+            "Contract must support ERC2981"
+        );
+
+        require(
+            NftContract.ownerOf(id) == msg.sender,
+            "The caller is not the nft owner"
+        );
+        require(endTime > startTime, "Error in start/end params");
+        require(maxBuyAmount > 0, "MaxBuyAmount must be non-zero");
+        _saleId.increment();
+        uint256 saleId = _saleId.current();
+
+        sales[saleId] = SaleInfo({
+            isERC721: true,
+            amount: 1,
+            id: saleId,
+            owner: msg.sender,
+            nftContract: nftContract,
+            nftId: id,
+            purchased: 0,
+            startTime: startTime,
+            endTime: endTime,
+            price: price,
+            maxBuyAmount: maxBuyAmount,
+            currency: currency
+        });
+
+        NftContract.safeTransferFrom(msg.sender, address(this), id, "");
         emit SaleCreated(saleId, sales[saleId]);
 
         return saleId;
