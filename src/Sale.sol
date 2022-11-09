@@ -28,8 +28,7 @@ contract Sale is Ownable, ReentrancyGuard {
     event Purchase(
         uint256 indexed saleId,
         address indexed purchaser,
-        address indexed recipient,
-        uint256 quantity
+        address indexed recipient
     );
     event NFTsReclaimed(
         uint256 indexed id,
@@ -140,7 +139,7 @@ contract Sale is Ownable, ReentrancyGuard {
         uint256 price,
         address currency
     ) external nonReentrant returns (uint256) {
-        IERC721 NftContract = IERC721(nftContract);
+        INFT NftContract = INFT(nftContract);
         require(
             Registry.isPlatformContract(nftContract),
             "NFT is not in approved contract"
@@ -297,7 +296,103 @@ contract Sale is Ownable, ReentrancyGuard {
             ""
         );
 
-        emit Purchase(saleId, msg.sender, recipient, amountToBuy);
+        emit Purchase(saleId, msg.sender, recipient);
+
+        return true;
+    }
+
+    function buyERC721(
+        uint256 saleId,
+        address recipient,
+        uint256 amountFromBalance
+    ) external payable nonReentrant returns (bool) {
+        require(
+            Registry.isPlatformContract(address(this)),
+            "This contract is deprecated"
+        );
+        require(
+            keccak256(bytes(getSaleStatus(saleId))) ==
+                keccak256(bytes("ACTIVE")),
+            "Sale is not active"
+        );
+        SaleInfo memory currentSale = sales[saleId];
+        address currency = currentSale.currency;
+        require(
+            amountFromBalance <= claimableFunds[msg.sender][currency],
+            "Not enough balance"
+        );
+
+        uint256 nftId = currentSale.nftId;
+
+        INFT Nft = INFT(currentSale.nftContract);
+        (address artistAddress, uint256 royalties) = Nft.royaltyInfo(
+            nftId,
+            currentSale.price
+        );
+
+        if (currency != ETH) {
+            IERC20 Token = IERC20(currency);
+
+            Token.safeTransferFrom(
+                msg.sender,
+                address(this),
+                currentSale.price - amountFromBalance
+            );
+        } else {
+            require(
+                msg.value == currentSale.price - amountFromBalance,
+                "msg.value + balance != price"
+            );
+        }
+        if (amountFromBalance > 0) {
+            claimableFunds[msg.sender][currency] -= amountFromBalance;
+            emit BalanceUpdated(
+                msg.sender,
+                currency,
+                claimableFunds[msg.sender][currency]
+            );
+        }
+
+        // system fee
+        (address systemWallet, uint256 fee) = Registry.feeInfo(
+            currentSale.price
+        );
+        claimableFunds[systemWallet][currency] += fee;
+        emit BalanceUpdated(
+            systemWallet,
+            currency,
+            claimableFunds[systemWallet][currency]
+        );
+
+        // artist royalty if artist isn't the seller
+        if (currentSale.owner != artistAddress) {
+            claimableFunds[artistAddress][currency] += royalties;
+            emit BalanceUpdated(
+                artistAddress,
+                currency,
+                claimableFunds[artistAddress][currency]
+            );
+        } else {
+            // since the artist is the seller
+            royalties = 0;
+        }
+
+        // seller gains
+        claimableFunds[currentSale.owner][currency] +=
+            currentSale.price -
+            fee -
+            royalties;
+        emit BalanceUpdated(
+            currentSale.owner,
+            currency,
+            claimableFunds[currentSale.owner][currency]
+        );
+
+        purchased[saleId][msg.sender]++;
+
+        Nft.safeTransferFrom(address(this), recipient, currentSale.nftId, "");
+
+        emit Purchase(saleId, msg.sender, recipient);
 
         return true;
     }
