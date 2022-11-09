@@ -12,6 +12,8 @@ interface INFT {
         view
         returns (uint256);
 
+    function ownerOf(uint256 tokenId) external view returns (address owner);
+
     function safeTransferFrom(
         address from,
         address to,
@@ -20,14 +22,6 @@ interface INFT {
         bytes memory data
     ) external;
 
-    function supportsInterface(bytes4 interfaceID) external returns (bool);
-}
-
-interface IERC721 {
-    function ownerOf(uint256 tokenId) external view returns (address owner);
-
-    function supportsInterface(bytes4 interfaceID) external returns (bool);
-
     function safeTransferFrom(
         address from,
         address to,
@@ -35,4 +29,23 @@ interface IERC721 {
         bytes calldata data
     ) external;
 
+    function supportsInterface(bytes4 interfaceID) external returns (bool);
 }
+
+// interface IERC721 {
+//     function royaltyInfo(uint256 id, uint256 _salePrice)
+//         external
+//         view
+//         returns (address, uint256);
+
+//     function ownerOf(uint256 tokenId) external view returns (address owner);
+
+//     function supportsInterface(bytes4 interfaceID) external returns (bool);
+
+//     function safeTransferFrom(
+//         address from,
+//         address to,
+//         uint256 tokenId,
+//         bytes calldata data
+//     ) external;
+// }
