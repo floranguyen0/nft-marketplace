@@ -10,7 +10,7 @@ import "./interfaces/marketplace/IRegistry.sol";
 
 /// @title Sale
 /// @author Linum Labs
-/// @notice Allows selling bundles of ERC1155 NFTs at a fix price
+/// @notice Allows selling bundles of ERC1155 NFTs and ERC721 at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
 contract Sale is Ownable, ReentrancyGuard {
@@ -107,6 +107,8 @@ contract Sale is Ownable, ReentrancyGuard {
             "Insufficient NFT balance"
         );
         require(endTime > startTime, "Error in start/end params");
+
+        // save the sale info
         _saleId.increment();
         uint256 saleId = _saleId.current();
 
@@ -124,6 +126,7 @@ contract Sale is Ownable, ReentrancyGuard {
             currency: currency
         });
 
+        // transfer nft to the platform
         NftContract.safeTransferFrom(msg.sender, address(this), id, amount, "");
 
         emit SaleCreated(saleId, sales[saleId]);
@@ -162,6 +165,8 @@ contract Sale is Ownable, ReentrancyGuard {
             "The caller is not the nft owner"
         );
         require(endTime > startTime, "Error in start/end params");
+
+        // save the sale info
         _saleId.increment();
         uint256 saleId = _saleId.current();
 
@@ -179,6 +184,7 @@ contract Sale is Ownable, ReentrancyGuard {
             currency: currency
         });
 
+        // transfer nft to the platform
         NftContract.safeTransferFrom(msg.sender, address(this), id, "");
         emit SaleCreated(saleId, sales[saleId]);
 
@@ -226,10 +232,11 @@ contract Sale is Ownable, ReentrancyGuard {
             amountToBuy * currentSale.price
         );
 
+        // send the nft price to the platform
         if (currency != ETH) {
-            IERC20 Token = IERC20(currency);
+            IERC20 token = IERC20(currency);
 
-            Token.safeTransferFrom(
+            token.safeTransferFrom(
                 msg.sender,
                 address(this),
                 (amountToBuy * currentSale.price) - amountFromBalance
@@ -265,9 +272,11 @@ contract Sale is Ownable, ReentrancyGuard {
             fee -
             royalties;
 
+        // update the sale info
         sales[saleId].purchased += amountToBuy;
         purchased[saleId][msg.sender] += amountToBuy;
 
+        // send the nft to the buyer
         Nft.safeTransferFrom(
             address(this),
             recipient,
@@ -310,11 +319,11 @@ contract Sale is Ownable, ReentrancyGuard {
             currentSale.price
         );
 
-        // send the currency to the platform
+        // send the nft price to the platform
         if (currency != ETH) {
-            IERC20 Token = IERC20(currency);
+            IERC20 token = IERC20(currency);
 
-            Token.safeTransferFrom(
+            token.safeTransferFrom(
                 msg.sender,
                 address(this),
                 currentSale.price - amountFromBalance
@@ -349,6 +358,7 @@ contract Sale is Ownable, ReentrancyGuard {
             fee -
             royalties;
 
+        // update the sale info and send the nft to the seller
         purchased[saleId][msg.sender]++;
 
         Nft.safeTransferFrom(address(this), recipient, currentSale.nftId, "");
@@ -374,10 +384,11 @@ contract Sale is Ownable, ReentrancyGuard {
             "Stock already sold or claimed"
         );
 
-        uint256 stock = sales[saleId].amount - sales[saleId].purchased;
+        // update the sale info and send the nfts back to the seller
         sales[saleId].purchased = sales[saleId].amount;
-        INFT Nft = INFT(sales[saleId].nftContract);
-        Nft.safeTransferFrom(
+
+        uint256 stock = sales[saleId].amount - sales[saleId].purchased;
+        INFT(sales[saleId].nftContract).safeTransferFrom(
             address(this),
             sales[saleId].owner,
             sales[saleId].nftId,
@@ -395,8 +406,7 @@ contract Sale is Ownable, ReentrancyGuard {
         require(payout > 0, "Nothing to claim");
         if (tokenAddress != ETH) {
             delete claimableFunds[msg.sender][tokenAddress];
-            IERC20 Token = IERC20(tokenAddress);
-            Token.safeTransfer(msg.sender, payout);
+            IERC20(tokenAddress).safeTransfer(msg.sender, payout);
         } else {
             delete claimableFunds[msg.sender][tokenAddress];
             (bool success, bytes memory reason) = msg.sender.call{
