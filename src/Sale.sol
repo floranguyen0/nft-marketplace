@@ -369,10 +369,10 @@ contract Sale is Ownable, ReentrancyGuard {
         return true;
     }
 
-    /// @notice Allows seller to reclaim unsold NFTs
+    /// @notice Allows seller to reclaim unsold NFTs (only for ERC1155)
     /// @dev sale must be cancelled or ended
     /// @param saleId the index of the sale to claim from
-    function claimNfts(uint256 saleId) external {
+    function claimNftsERC1155(uint256 saleId) external {
         bytes32 status = keccak256(bytes(getSaleStatus(saleId)));
         require(
             status == keccak256(bytes("CANCELLED")) ||
@@ -421,9 +421,15 @@ contract Sale is Ownable, ReentrancyGuard {
 
     /// @notice Allows contract owner or seller to cancel a pending or active sale
     /// @param saleId the index of the sale to cancel
-    function cancelSale(uint256 saleId) external {
+    function cancelSale(uint256 saleId, bool isERC1155) external {
+        address nftOwner = isERC1155
+            ? sales[saleId].owner
+            : INFT(salesERC721[saleId].nftContract).ownerOf(
+                salesERC721[saleId].nftId
+            );
+
         require(
-            msg.sender == sales[saleId].owner || msg.sender == owner(),
+            msg.sender == nftOwner || msg.sender == owner(),
             "Only owner or sale creator"
         );
         require(
