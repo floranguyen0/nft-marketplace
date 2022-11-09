@@ -399,8 +399,10 @@ contract Sale is Ownable, ReentrancyGuard {
             Token.safeTransfer(msg.sender, payout);
         } else {
             delete claimableFunds[msg.sender][tokenAddress];
-            (bool success, ) = msg.sender.call{value: payout}("");
-            require(success, "ETH payout failed");
+            (bool success, bytes memory reason) = msg.sender.call{
+                value: payout
+            }("");
+            require(success, string(reason));
         }
 
         emit ClaimFunds(msg.sender, tokenAddress, payout);
