@@ -391,22 +391,19 @@ contract Sale is Ownable, ReentrancyGuard {
     /// @notice Withdraws in-contract balance of a particular token
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     function claimFunds(address tokenAddress) external {
-        require(
-            claimableFunds[msg.sender][tokenAddress] > 0,
-            "Nothing to claim"
-        );
         uint256 payout = claimableFunds[msg.sender][tokenAddress];
+        require(payout > 0, "Nothing to claim");
         if (tokenAddress != ETH) {
+            delete claimableFunds[msg.sender][tokenAddress];
             IERC20 Token = IERC20(tokenAddress);
-            claimableFunds[msg.sender][tokenAddress] = 0;
             Token.safeTransfer(msg.sender, payout);
         } else {
-            claimableFunds[msg.sender][tokenAddress] = 0;
+            delete claimableFunds[msg.sender][tokenAddress];
             (bool success, ) = msg.sender.call{value: payout}("");
             require(success, "ETH payout failed");
         }
 
-        emit ClaimFunds(msg.sender, tokenAddress, newBalance);
+        emit ClaimFunds(msg.sender, tokenAddress, payout);
     }
 
     /// @notice Allows contract owner or seller to cancel a pending or active sale
