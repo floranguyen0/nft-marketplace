@@ -21,6 +21,7 @@ contract Sale is Ownable, ReentrancyGuard {
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
 
     Counters.Counter private _saleId;
+    Counters.Counter private _saleERC721Id;
     IRegistry private Registry;
 
     event SaleCreated(uint256 indexed id, SaleInfo newSale);
@@ -173,8 +174,8 @@ contract Sale is Ownable, ReentrancyGuard {
         require(endTime > startTime, "Error in start/end params");
 
         // save the sale info
-        _saleId.increment();
-        uint256 saleId = _saleId.current();
+        _saleERC721Id.increment();
+        uint256 saleId = _saleERC721Id.current();
 
         salesERC721[saleId] = SaleInfoERC721({
             nftContract: nftContract,
@@ -369,10 +370,10 @@ contract Sale is Ownable, ReentrancyGuard {
         return true;
     }
 
-    /// @notice Allows seller to reclaim unsold NFTs (only for ERC1155)
+    /// @notice Allows seller to reclaim unsold NFTs (ONLY FOR ERC1155)
     /// @dev sale must be cancelled or ended
     /// @param saleId the index of the sale to claim from
-    function claimNftsERC1155(uint256 saleId) external {
+    function claimNfts(uint256 saleId) external {
         bytes32 status = keccak256(bytes(getSaleStatus(saleId)));
         require(
             status == keccak256(bytes("CANCELLED")) ||
@@ -414,6 +415,20 @@ contract Sale is Ownable, ReentrancyGuard {
                 value: payout
             }("");
             require(success, string(reason));
+
+            // test that or this
+            // (bool success, bytes memory result) = address(_impl).delegatecall(
+            //     signature
+            // );
+            // if (success == false) {
+            //     assembly {
+            //         let ptr := mload(0x40)
+            //         let size := returndatasize()
+            //         returndatacopy(ptr, 0, size)
+            //         revert(ptr, size)
+            //     }
+            // }
+            // return result;
         }
 
         emit ClaimFunds(msg.sender, tokenAddress, payout);
