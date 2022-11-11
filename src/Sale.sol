@@ -3,6 +3,8 @@ pragma solidity ^0.8.15;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/marketplace/INFT.sol";
@@ -13,7 +15,7 @@ import "./interfaces/marketplace/IRegistry.sol";
 /// @notice Allows selling bundles of ERC1155 NFTs and ERC721 at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
-contract Sale is Ownable, ReentrancyGuard {
+contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
@@ -457,12 +459,6 @@ contract Sale is Ownable, ReentrancyGuard {
         cancelled[saleId] = true;
 
         emit SaleCancelled(saleId);
-    }
-
-    /// @notice allows contract to receive ERC1155 NFTs
-    function onERC1155Received() external pure returns (bytes4) {
-        // 0xf23a6e61 = bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)")
-        return 0xf23a6e61;
     }
 
     function getSaleStatus(uint256 saleId) public view returns (string memory) {
