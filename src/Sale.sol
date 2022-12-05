@@ -23,10 +23,9 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
 
     Counters.Counter private _saleId;
-    Counters.Counter private _saleERC721Id;
     IRegistry private Registry;
 
-    event SaleCreated(uint256 indexed id, SaleInfo newSale);
+    event SaleCreated(uint256 indexed id, address indexed nftContract, uint256 indexed nftID);
     event SaleCancelled(uint256 indexed saleId);
     event Purchase(
         uint256 indexed saleId,
@@ -45,9 +44,9 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     );
 
     struct SaleInfo {
-        address owner;
         address nftContract;
         uint256 nftId;
+        address owner;
         uint256 amount; // amount of NFTs being sold
         uint256 purchased; // amount of NFTs purchased thus far
         uint256 startTime;
@@ -56,18 +55,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         address currency; // use zero address or 0xaaa for ETH
     }
 
-    struct SaleInfoERC721 {
-        address nftContract;
-        uint256 nftId;
-        uint256 startTime;
-        uint256 endTime;
-        uint256 price;
-        address currency; // use zero address or 0xaaa for ETH
-    }
-
     // saleId => SaleInfo
     mapping(uint256 => SaleInfo) public sales;
-    mapping(uint256 => SaleInfoERC721) public salesERC721;
     mapping(uint256 => bool) private cancelled;
     mapping(uint256 => mapping(address => uint256)) public purchased;
     // user address => tokenAddress => amount
@@ -81,15 +70,15 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     /// @dev NFT contract must be ERC2981-compliant and recognized by Registry
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     /// @param nftContract the address of the NFT contract
-    /// @param id the id of the NFTs on the NFT contract
+    /// @param nftId the id of the NFTs on the NFT contract
     /// @param startTime uint256 timestamp when the sale should commence
     /// @param endTime uint256 timestamp when sale should end
     /// @param price the price for each NFT
     /// @param currency address of the token bids should be made in
     /// @return the index of the sale being created
-    function createSale(
+    function createSaleERC1155(
         address nftContract,
-        uint256 id,
+        uint256 nftId,
         uint256 amount,
         uint256 startTime,
         uint256 endTime,
@@ -114,7 +103,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "Contract must support ERC2981"
         );
         require(
-            NftContract.balanceOf(msg.sender, id) >= amount,
+            NftContract.balanceOf(msg.sender, nftId) >= amount,
             "Insufficient NFT balance"
         );
         require(endTime > startTime, "Error in start/end params");
@@ -126,7 +115,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         sales[saleId] = SaleInfo({
             owner: msg.sender,
             nftContract: nftContract,
-            nftId: id,
+            nftId: nftId,
             amount: amount,
             purchased: 0,
             startTime: startTime,
@@ -136,16 +125,16 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         });
 
         // transfer nft to the platform
-        NftContract.safeTransferFrom(msg.sender, address(this), id, amount, "");
+        NftContract.safeTransferFrom(msg.sender, address(this), nftId, amount, "");
 
-        emit SaleCreated(saleId, sales[saleId]);
+        emit SaleCreated(saleId, nftContract, nftId);
 
         return saleId;
     }
 
     function createSaleERC721(
         address nftContract,
-        uint256 id,
+        uint256 nftId,
         uint256 startTime,
         uint256 endTime,
         uint256 price,
@@ -170,18 +159,21 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         );
 
         require(
-            NftContract.ownerOf(id) == msg.sender,
+            NftContract.ownerOf(nftId) == msg.sender,
             "The caller is not the nft owner"
         );
         require(endTime > startTime, "Error in start/end params");
 
         // save the sale info
-        _saleERC721Id.increment();
-        uint256 saleId = _saleERC721Id.current();
+        _saleId.increment();
+        uint256 saleId = _saleId.current();
 
-        salesERC721[saleId] = SaleInfoERC721({
+        sales[saleId] = SaleInfo({
             nftContract: nftContract,
-            nftId: id,
+            nftId: nftId,
+            owner: msg.sender,
+            purchased: 0,
+            amount: 0,
             startTime: startTime,
             endTime: endTime,
             price: price,
@@ -189,8 +181,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         });
 
         // transfer nft to the platform
-        NftContract.safeTransferFrom(msg.sender, address(this), id, "");
-        emit SaleCreated(saleId, sales[saleId]);
+        NftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
+        emit SaleCreated(saleId,nftContract, nftId);
 
         return saleId;
     }
@@ -388,10 +380,10 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "Stock already sold or claimed"
         );
 
+        uint256 stock = sales[saleId].amount - sales[saleId].purchased;
         // update the sale info and send the nfts back to the seller
         sales[saleId].purchased = sales[saleId].amount;
 
-        uint256 stock = sales[saleId].amount - sales[saleId].purchased;
         INFT(sales[saleId].nftContract).safeTransferFrom(
             address(this),
             sales[saleId].owner,
@@ -441,8 +433,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     function cancelSale(uint256 saleId, bool isERC1155) external {
         address nftOwner = isERC1155
             ? sales[saleId].owner
-            : INFT(salesERC721[saleId].nftContract).ownerOf(
-                salesERC721[saleId].nftId
+            : INFT(sales[saleId].nftContract).ownerOf(
+                sales[saleId].nftId
             );
 
         require(
