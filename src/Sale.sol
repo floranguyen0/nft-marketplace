@@ -156,11 +156,13 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     /// @notice Allows purchase of NFTs from a sale
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     /// @dev automatically calculates system fee and royalties (where applicable)
+    /// @dev pass in 1 if a user buys ERC 721
     /// @param saleId the index of the sale to purchase from
     /// @param amountToBuy the number of NFTs to purchase
     /// @param amountFromBalance the amount to spend from msg.sender's balance in this contract
     /// @return a bool indicating success
     function buy(
+        bool isERC721,
         uint256 saleId,
         address recipient,
         uint256 amountToBuy,
@@ -176,10 +178,12 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "Sale is not active"
         );
         SaleInfo memory currentSale = sales[saleId];
-        require(
-            amountToBuy <= currentSale.amount - currentSale.purchased,
-            "Not enough stock for purchase"
-        );
+        if (!isERC721) {
+            require(
+                amountToBuy <= currentSale.amount - currentSale.purchased,
+                "Not enough stock for purchase"
+            );
+        }
         address currency = currentSale.currency;
         require(
             amountFromBalance <= claimableFunds[msg.sender][currency],
@@ -239,94 +243,24 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         purchased[saleId][msg.sender] += amountToBuy;
 
         // send the nft to the buyer
-        Nft.safeTransferFrom(
-            address(this),
-            recipient,
-            currentSale.nftId,
-            amountToBuy,
-            ""
-        );
-
-        emit Purchase(saleId, msg.sender, recipient);
-
-        return true;
-    }
-
-    function buyERC721(
-        uint256 saleId,
-        address recipient,
-        uint256 amountFromBalance
-    ) external payable nonReentrant returns (bool) {
-        require(
-            Registry.isPlatformContract(address(this)),
-            "This contract is deprecated"
-        );
-        require(
-            keccak256(bytes(getSaleStatus(saleId))) ==
-                keccak256(bytes("ACTIVE")),
-            "Sale is not active"
-        );
-        SaleInfo memory currentSale = sales[saleId];
-        address currency = currentSale.currency;
-        require(
-            amountFromBalance <= claimableFunds[msg.sender][currency],
-            "Not enough balance"
-        );
-
-        uint256 nftId = currentSale.nftId;
-
-        INFT Nft = INFT(currentSale.nftContract);
-        (address artistAddress, uint256 royalties) = Nft.royaltyInfo(
-            nftId,
-            currentSale.price
-        );
-
-        // send the nft price to the platform
-        if (currency != ETH) {
-            IERC20 token = IERC20(currency);
-
-            token.safeTransferFrom(
-                msg.sender,
+        if (isERC721) {
+            Nft.safeTransferFrom(
                 address(this),
-                currentSale.price - amountFromBalance
+                recipient,
+                currentSale.nftId,
+                ""
             );
         } else {
-            require(
-                msg.value == currentSale.price - amountFromBalance,
-                "msg.value + balance != price"
+            Nft.safeTransferFrom(
+                address(this),
+                recipient,
+                currentSale.nftId,
+                amountToBuy,
+                ""
             );
         }
-        if (amountFromBalance > 0) {
-            claimableFunds[msg.sender][currency] -= amountFromBalance;
-        }
-
-        // system fee
-        (address systemWallet, uint256 fee) = Registry.feeInfo(
-            currentSale.price
-        );
-        claimableFunds[systemWallet][currency] += fee;
-
-        // artist royalty if artist isn't the seller
-        if (currentSale.owner != artistAddress) {
-            claimableFunds[artistAddress][currency] += royalties;
-        } else {
-            // since the artist is the seller
-            royalties = 0;
-        }
-
-        // seller gains
-        claimableFunds[currentSale.owner][currency] +=
-            currentSale.price -
-            fee -
-            royalties;
-
-        // update the sale info and send the nft to the seller
-        purchased[saleId][msg.sender]++;
-
-        Nft.safeTransferFrom(address(this), recipient, currentSale.nftId, "");
 
         emit Purchase(saleId, msg.sender, recipient);
-
         return true;
     }
 
