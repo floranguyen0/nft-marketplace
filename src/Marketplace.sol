@@ -7,11 +7,9 @@ import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "./interfaces/marketplace/INFT.sol";
-import "./interfaces/marketplace/IRegistry.sol";
+import "./interfaces/INFT.sol";
+import "./interfaces/IRegistry.sol";
 
-/// @title Sale
-/// @author Linum Labs
 /// @notice Allows selling bundles of ERC1155 NFTs and ERC721 at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
