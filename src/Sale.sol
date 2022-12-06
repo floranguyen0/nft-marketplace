@@ -264,10 +264,10 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         return true;
     }
 
-    /// @notice Allows seller to reclaim unsold NFTs (ONLY FOR ERC1155)
+    /// @notice Allows seller to reclaim unsold NFTs
     /// @dev sale must be cancelled or ended
     /// @param saleId the index of the sale to claim from
-    function claimNfts(uint256 saleId) external {
+    function claimNfts(bool isERC721, uint256 saleId) external {
         bytes32 status = keccak256(bytes(getSaleStatus(saleId)));
         require(
             status == keccak256(bytes("CANCELLED")) ||
@@ -283,14 +283,22 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 stock = sales[saleId].amount - sales[saleId].purchased;
         // update the sale info and send the nfts back to the seller
         sales[saleId].purchased = sales[saleId].amount;
-
-        INFT(sales[saleId].nftContract).safeTransferFrom(
-            address(this),
-            sales[saleId].owner,
-            sales[saleId].nftId,
-            stock,
-            ""
-        );
+        if (isERC721) {
+            INFT(sales[saleId].nftContract).safeTransferFrom(
+                address(this),
+                sales[saleId].owner,
+                sales[saleId].nftId,
+                ""
+            );
+        } else {
+            INFT(sales[saleId].nftContract).safeTransferFrom(
+                address(this),
+                sales[saleId].owner,
+                sales[saleId].nftId,
+                stock,
+                ""
+            );
+        }
 
         emit NFTsReclaimed(saleId, msg.sender, stock);
     }
