@@ -173,8 +173,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "This contract is deprecated"
         );
         require(
-            keccak256(bytes(getSaleStatus(saleId))) ==
-                keccak256(bytes("ACTIVE")),
+            getSaleStatus(saleId) == keccak256(bytes("ACTIVE")),
             "Sale is not active"
         );
         SaleInfo memory currentSale = sales[saleId];
@@ -268,10 +267,9 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     /// @dev sale must be cancelled or ended
     /// @param saleId the index of the sale to claim from
     function claimNfts(bool isERC721, uint256 saleId) external {
-        bytes32 status = keccak256(bytes(getSaleStatus(saleId)));
+        bytes32 status = getSaleStatus(saleId);
         require(
-            status == keccak256(bytes("CANCELLED")) ||
-                status == keccak256(bytes("ENDED")),
+            status == "CANCELLED" || status == "ENDED",
             "Cannot claim before sale closes"
         );
         require(msg.sender == sales[saleId].owner, "Only nft owner can claim");
@@ -338,20 +336,18 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
     /// @notice Allows contract owner or seller to cancel a pending or active sale
     /// @param saleId the index of the sale to cancel
-    function cancelSale(uint256 saleId, bool isERC1155) external {
-        address nftOwner = isERC1155
-            ? sales[saleId].owner
-            : INFT(sales[saleId].nftContract).ownerOf(sales[saleId].nftId);
+    function cancelSale(bool isERC721, uint256 saleId) external {
+        address nftOwner = isERC721
+            ? INFT(sales[saleId].nftContract).ownerOf(sales[saleId].nftId)
+            : sales[saleId].owner;
 
         require(
             msg.sender == nftOwner || msg.sender == owner(),
             "Only owner or sale creator"
         );
         require(
-            keccak256(bytes(getSaleStatus(saleId))) ==
-                keccak256(bytes("ACTIVE")) ||
-                keccak256(bytes(getSaleStatus(saleId))) ==
-                keccak256(bytes("PENDING")),
+            getSaleStatus(saleId) == "ACTIVE" ||
+                getSaleStatus(saleId) == "PENDING",
             "Must be active or pending"
         );
         cancelled[saleId] = true;
@@ -359,7 +355,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         emit SaleCancelled(saleId);
     }
 
-    function getSaleStatus(uint256 saleId) public view returns (string memory) {
+    function getSaleStatus(uint256 saleId) public view returns (bytes32) {
         require(
             saleId <= _saleId.current() && saleId > 0,
             "Sale does not exist"
