@@ -12,12 +12,21 @@ interface INFT {
         view
         returns (uint256);
 
+    function ownerOf(uint256 tokenId) external view returns (address owner);
+
     function safeTransferFrom(
         address from,
         address to,
         uint256 id,
         uint256 amount,
         bytes memory data
+    ) external;
+
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes calldata data
     ) external;
 
     function supportsInterface(bytes4 interfaceID) external returns (bool);
