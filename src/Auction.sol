@@ -70,83 +70,6 @@ contract Auction is Ownable, ReentrancyGuard {
         Registry = IRegistry(registry);
     }
 
-    /// @notice Returns a struct with an auction's details
-    /// @param auctionId the index of the auction being queried
-    /// @return an "AuctionInfo" struct with the details of the auction requested
-    function getAuctionDetails(uint256 auctionId)
-        external
-        view
-        returns (AuctionInfo memory)
-    {
-        require(
-            auctionId <= _auctionId.current() && auctionId > 0,
-            "auction does not exist"
-        );
-        return auctions[auctionId];
-    }
-
-    /// @notice Returns the status of a particular auction
-    /// @dev statuses are: PENDING, CANCELLED, ACTIVE, ENDED, ENDED & CLAIMED
-    /// @param auctionId the index of the auction being queried
-    /// @return a string of the auction's status
-    function getAuctionStatus(uint256 auctionId)
-        public
-        view
-        returns (string memory)
-    {
-        require(
-            auctionId <= _auctionId.current() && auctionId > 0,
-            "auction does not exist"
-        );
-        if (cancelled[auctionId] || !Registry.isPlatformContract(address(this)))
-            return "CANCELLED";
-        if (claimed[auctionId]) return "ENDED & CLAIMED";
-        if (block.timestamp < auctions[auctionId].startTime) return "PENDING";
-        if (
-            block.timestamp >= auctions[auctionId].startTime &&
-            block.timestamp < auctions[auctionId].endTime
-        ) return "ACTIVE";
-        if (block.timestamp > auctions[auctionId].endTime) return "ENDED";
-        revert("error");
-    }
-
-    /// @notice Returns the in-contract balance of a specific address for a specific token
-    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
-    /// @param account the address to query the balance of
-    /// @param token the address of the token to query the balance for
-    /// @return the uint256 balance of the token queired for the address queried
-    function getClaimableBalance(address account, address token)
-        external
-        view
-        returns (uint256)
-    {
-        return claimableFunds[account][token];
-    }
-
-    /// @notice Returns details of a specific bid
-    /// @dev the amount of an outbid bid is reduced to zero
-    /// @param auctionId the index of the auction the bid was places in
-    /// @param bidder the address of the bidder
-    /// @return a Bid struct with details of a specific bid
-    function getBidDetails(uint256 auctionId, address bidder)
-        external
-        view
-        returns (Bid memory)
-    {
-        return bids[auctionId][bidder];
-    }
-
-    /// @notice Returns the address of the current highest bidder in a particular auction
-    /// @param auctionId the index of the auction being queried
-    /// @return the address of the highest bidder
-    function getHighestBidder(uint256 auctionId)
-        external
-        view
-        returns (address)
-    {
-        return highestBid[auctionId];
-    }
-
     /// @notice Creates a first-price auction for a ERC1155 NFT
     /// @dev NFT contract must be ERC2981-compliant and recognized by Registry
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
@@ -502,6 +425,83 @@ contract Auction is Ownable, ReentrancyGuard {
                 auctions[auctionId].currency
             ]
         );
+    }
+
+    /// @notice Returns a struct with an auction's details
+    /// @param auctionId the index of the auction being queried
+    /// @return an "AuctionInfo" struct with the details of the auction requested
+    function getAuctionDetails(uint256 auctionId)
+        external
+        view
+        returns (AuctionInfo memory)
+    {
+        require(
+            auctionId <= _auctionId.current() && auctionId > 0,
+            "auction does not exist"
+        );
+        return auctions[auctionId];
+    }
+
+    /// @notice Returns the in-contract balance of a specific address for a specific token
+    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
+    /// @param account the address to query the balance of
+    /// @param token the address of the token to query the balance for
+    /// @return the uint256 balance of the token queired for the address queried
+    function getClaimableBalance(address account, address token)
+        external
+        view
+        returns (uint256)
+    {
+        return claimableFunds[account][token];
+    }
+
+    /// @notice Returns details of a specific bid
+    /// @dev the amount of an outbid bid is reduced to zero
+    /// @param auctionId the index of the auction the bid was places in
+    /// @param bidder the address of the bidder
+    /// @return a Bid struct with details of a specific bid
+    function getBidDetails(uint256 auctionId, address bidder)
+        external
+        view
+        returns (Bid memory)
+    {
+        return bids[auctionId][bidder];
+    }
+
+    /// @notice Returns the address of the current highest bidder in a particular auction
+    /// @param auctionId the index of the auction being queried
+    /// @return the address of the highest bidder
+    function getHighestBidder(uint256 auctionId)
+        external
+        view
+        returns (address)
+    {
+        return highestBid[auctionId];
+    }
+
+    /// @notice Returns the status of a particular auction
+    /// @dev statuses are: PENDING, CANCELLED, ACTIVE, ENDED, ENDED & CLAIMED
+    /// @param auctionId the index of the auction being queried
+    /// @return a string of the auction's status
+    function getAuctionStatus(uint256 auctionId)
+        public
+        view
+        returns (string memory)
+    {
+        require(
+            auctionId <= _auctionId.current() && auctionId > 0,
+            "auction does not exist"
+        );
+        if (cancelled[auctionId] || !Registry.isPlatformContract(address(this)))
+            return "CANCELLED";
+        if (claimed[auctionId]) return "ENDED & CLAIMED";
+        if (block.timestamp < auctions[auctionId].startTime) return "PENDING";
+        if (
+            block.timestamp >= auctions[auctionId].startTime &&
+            block.timestamp < auctions[auctionId].endTime
+        ) return "ACTIVE";
+        if (block.timestamp > auctions[auctionId].endTime) return "ENDED";
+        revert("error");
     }
 
     /// @notice allows contract to receive ERC1155 NFTs
