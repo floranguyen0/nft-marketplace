@@ -63,32 +63,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 indexed newBalance
     );
 
-    modifier beforeSaleOrAuction(
-        address nftAddress,
-        uint256 startTime,
-        uint256 endTime,
-        address currency
-    ) {
-        require(
-            Registry.isPlatformContract(nftAddress),
-            "NFT is not in approved contract"
-        );
-        require(
-            Registry.isPlatformContract(address(this)),
-            "This contract is deprecated"
-        );
-        require(
-            Registry.isApprovedCurrency(currency),
-            "Currency is not supported"
-        );
-        require(
-            INFT(nftAddress).supportsInterface(0x2a55205a),
-            "Contract must support ERC2981"
-        );
-        require(endTime > startTime, "Error in start/end params");
-        _;
-    }
-
     struct SaleInfo {
         address nftAddress;
         uint256 nftId;
@@ -157,12 +131,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 endTime,
         uint256 price,
         address currency
-    )
-        external
-        nonReentrant
-        beforeSaleOrAuction(nftAddress, startTime, endTime, currency)
-        returns (uint256)
-    {
+    ) external nonReentrant returns (uint256) {
+        _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         INFT NftContract = INFT(nftAddress);
         if (isERC721) {
             require(
@@ -428,12 +398,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 endTime,
         uint256 reservePrice,
         address currency
-    )
-        external
-        nonReentrant
-        beforeSaleOrAuction(nftAddress, startTime, endTime, currency)
-        returns (uint256)
-    {
+    ) external nonReentrant returns (uint256) {
+        _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         INFT NftContract = INFT(nftAddress);
         require(NftContract.balanceOf(msg.sender, id) > 0, "does not own NFT");
 
@@ -829,5 +795,30 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         returns (uint256)
     {
         return claimableFunds[account][token];
+    }
+
+    function _beforeSaleOrAuction(
+        address nftAddress,
+        uint256 startTime,
+        uint256 endTime,
+        address currency
+    ) private {
+        require(
+            Registry.isPlatformContract(nftAddress),
+            "NFT is not in approved contract"
+        );
+        require(
+            Registry.isPlatformContract(address(this)),
+            "This contract is deprecated"
+        );
+        require(
+            Registry.isApprovedCurrency(currency),
+            "Currency is not supported"
+        );
+        require(
+            INFT(nftAddress).supportsInterface(0x2a55205a),
+            "Contract must support ERC2981"
+        );
+        require(endTime > startTime, "Error in start/end params");
     }
 }
