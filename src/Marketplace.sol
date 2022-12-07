@@ -101,7 +101,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     mapping(address => mapping(address => uint256)) public claimableFunds;
 
     mapping(uint256 => AuctionInfo) private auctions;
-    mapping(uint256 => bool) private cancelled;
+    mapping(uint256 => bool) private cancelledAuction;
     mapping(uint256 => bool) private claimed;
     mapping(uint256 => address) private highestBid;
     mapping(uint256 => mapping(address => Bid)) private bids;
@@ -290,7 +290,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     }
 
     /// @notice Allows seller to reclaim unsold NFTs
-    /// @dev sale must be cancelled or ended
+    /// @dev sale must be cancelledAuction or ended
     /// @param saleId the index of the sale to claim from
     function claimNfts(bool isERC721, uint256 saleId) external {
         bytes32 status = getSaleStatus(saleId);
@@ -554,7 +554,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             );
         } else if (msg.sender == auctions[auctionId].owner) {
             require(
-                cancelled[auctionId] ||
+                cancelledAuction[auctionId] ||
                     (bids[auctionId][highestBid[auctionId]].amount <
                         auctions[auctionId].reservePrice &&
                         block.timestamp > auctions[auctionId].endTime),
@@ -588,7 +588,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
     /// @notice Allows contract owner to send NFT to auction winner and funds to auctioner's balance
     /// @dev prevents assets from being stuck if winner does not claim
-    /// @param auctionId the index of the auction to resolve
     function resolveAuction(uint256 auctionId) external onlyOwner {
         require(
             keccak256(bytes(getAuctionStatus(auctionId))) ==
@@ -618,7 +617,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     }
 
     /// @notice Allows contract owner or auctioner to cancel a pending or active auction
-    /// @param auctionId the index of the auction to cancel
     function cancelAuction(uint256 auctionId) external {
         require(
             msg.sender == auctions[auctionId].owner || msg.sender == owner(),
@@ -631,7 +629,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
                 keccak256(bytes("PENDING")),
             "must be active or pending"
         );
-        cancelled[auctionId] = true;
+        cancelledAuction[auctionId] = true;
         // current highest bid moves from escrow to being reclaimable
         address highestBidder = highestBid[auctionId];
         uint256 _highestBid = bids[auctionId][highestBidder].amount;
@@ -648,57 +646,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         emit AuctionCancelled(auctionId);
     }
 
-    /// @notice internal function for handling royalties and system fee
-    function _nftPayment(
-        uint256 auctionId,
-        uint256 fundsToPay,
-        INFT Nft
-    ) internal {
-        escrow[auctions[auctionId].currency] -= fundsToPay;
-        // if this is from successful auction
-        (address artistAddress, uint256 royalties) = Nft.royaltyInfo(
-            auctions[auctionId].nftId,
-            fundsToPay
-        );
-
-        // system fee
-        (address systemWallet, uint256 fee) = Registry.feeInfo(fundsToPay);
-        fundsToPay -= fee;
-        claimableFunds[systemWallet][auctions[auctionId].currency] += fee;
-        emit BalanceUpdated(
-            systemWallet,
-            auctions[auctionId].currency,
-            claimableFunds[systemWallet][auctions[auctionId].currency]
-        );
-
-        // artist royalty if artist isn't the seller
-        if (auctions[auctionId].owner != artistAddress) {
-            fundsToPay -= royalties;
-            claimableFunds[artistAddress][
-                auctions[auctionId].currency
-            ] += royalties;
-            emit BalanceUpdated(
-                artistAddress,
-                auctions[auctionId].currency,
-                claimableFunds[artistAddress][auctions[auctionId].currency]
-            );
-        }
-
-        // seller gains
-        claimableFunds[auctions[auctionId].owner][
-            auctions[auctionId].currency
-        ] += fundsToPay;
-        emit BalanceUpdated(
-            auctions[auctionId].owner,
-            auctions[auctionId].currency,
-            claimableFunds[auctions[auctionId].owner][
-                auctions[auctionId].currency
-            ]
-        );
-    }
-
-    /// @notice Returns a struct with an auction's details
-    /// @param auctionId the index of the auction being queried
     /// @return an "AuctionInfo" struct with the details of the auction requested
     function getAuctionDetails(uint256 auctionId)
         external
@@ -712,10 +659,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         return auctions[auctionId];
     }
 
-    /// @notice Returns details of a specific bid
     /// @dev the amount of an outbid bid is reduced to zero
-    /// @param auctionId the index of the auction the bid was places in
-    /// @param bidder the address of the bidder
     /// @return a Bid struct with details of a specific bid
     function getBidDetails(uint256 auctionId, address bidder)
         external
@@ -726,8 +670,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     }
 
     /// @notice Returns the address of the current highest bidder in a particular auction
-    /// @param auctionId the index of the auction being queried
-    /// @return the address of the highest bidder
     function getHighestBidder(uint256 auctionId)
         external
         view
@@ -736,10 +678,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         return highestBid[auctionId];
     }
 
-    /// @notice Returns the status of a particular auction
-    /// @dev statuses are: PENDING, CANCELLED, ACTIVE, ENDED, ENDED & CLAIMED
-    /// @param auctionId the index of the auction being queried
-    /// @return a string of the auction's status
     function getAuctionStatus(uint256 auctionId)
         public
         view
@@ -749,7 +687,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             auctionId <= _auctionId.current() && auctionId > 0,
             "auction does not exist"
         );
-        if (cancelled[auctionId] || !Registry.isPlatformContract(address(this)))
+        if (cancelledAuction[auctionId] || !Registry.isPlatformContract(address(this)))
             return "CANCELLED";
         if (claimed[auctionId]) return "ENDED & CLAIMED";
         if (block.timestamp < auctions[auctionId].startTime) return "PENDING";
@@ -820,5 +758,54 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "Contract must support ERC2981"
         );
         require(endTime > startTime, "Error in start/end params");
+    }
+
+    /// @notice internal function for handling royalties and system fee
+    function _nftPayment(
+        uint256 auctionId,
+        uint256 fundsToPay,
+        INFT Nft
+    ) private {
+        escrow[auctions[auctionId].currency] -= fundsToPay;
+        // if this is from successful auction
+        (address artistAddress, uint256 royalties) = Nft.royaltyInfo(
+            auctions[auctionId].nftId,
+            fundsToPay
+        );
+
+        // system fee
+        (address systemWallet, uint256 fee) = Registry.feeInfo(fundsToPay);
+        fundsToPay -= fee;
+        claimableFunds[systemWallet][auctions[auctionId].currency] += fee;
+        emit BalanceUpdated(
+            systemWallet,
+            auctions[auctionId].currency,
+            claimableFunds[systemWallet][auctions[auctionId].currency]
+        );
+
+        // artist royalty if artist isn't the seller
+        if (auctions[auctionId].owner != artistAddress) {
+            fundsToPay -= royalties;
+            claimableFunds[artistAddress][
+                auctions[auctionId].currency
+            ] += royalties;
+            emit BalanceUpdated(
+                artistAddress,
+                auctions[auctionId].currency,
+                claimableFunds[artistAddress][auctions[auctionId].currency]
+            );
+        }
+
+        // seller gains
+        claimableFunds[auctions[auctionId].owner][
+            auctions[auctionId].currency
+        ] += fundsToPay;
+        emit BalanceUpdated(
+            auctions[auctionId].owner,
+            auctions[auctionId].currency,
+            claimableFunds[auctions[auctionId].owner][
+                auctions[auctionId].currency
+            ]
+        );
     }
 }
