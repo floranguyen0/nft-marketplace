@@ -22,8 +22,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     // address alias for using ETH as a currency
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
 
-    Counters.Counter private _saleId;
-    Counters.Counter private _auctionId;
+    Counters.Counter private _saleId; // _saleId starts from 1
+    Counters.Counter private _auctionId; // _autionId starts from 1
     IRegistry private Registry;
 
     event SaleCreated(
@@ -198,10 +198,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             Registry.isPlatformContract(address(this)),
             "This contract is deprecated"
         );
-        require(
-            getSaleStatus(saleId) == keccak256(bytes("ACTIVE")),
-            "Sale is not active"
-        );
+        require(getSaleStatus(saleId) == "ACTIVE", "Sale is not active");
         SaleInfo memory currentSale = sales[saleId];
         if (!isERC721) {
             require(
@@ -341,20 +338,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
                 value: payout
             }("");
             require(success, string(reason));
-
-            // test that or this
-            // (bool success, bytes memory result) = address(_impl).delegatecall(
-            //     signature
-            // );
-            // if (success == false) {
-            //     assembly {
-            //         let ptr := mload(0x40)
-            //         let size := returndatasize()
-            //         returndatacopy(ptr, 0, size)
-            //         revert(ptr, size)
-            //     }
-            // }
-            // return result;
         }
 
         emit ClaimFunds(msg.sender, tokenAddress, payout);
@@ -420,7 +403,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         NftContract.safeTransferFrom(msg.sender, address(this), id, 1, "");
 
         emit NewAuction(auctionId, auctions[auctionId]);
-
         return auctionId;
     }
 
