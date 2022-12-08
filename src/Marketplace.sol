@@ -20,8 +20,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     // address alias for using ETH as a currency
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
 
-    Counters.Counter private _saleId;
-    Counters.Counter private _auctionId;
+    Counters.Counter private _saleId; // _saleId starts from 1
+    Counters.Counter private _auctionId; // _autionId starts from 1
     IRegistry private Registry;
 
     event SaleCreated(
@@ -196,10 +196,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             Registry.isPlatformContract(address(this)),
             "This contract is deprecated"
         );
-        require(
-            getSaleStatus(saleId) == keccak256(bytes("ACTIVE")),
-            "Sale is not active"
-        );
+        require(getSaleStatus(saleId) == "ACTIVE", "Sale is not active");
         SaleInfo memory currentSale = sales[saleId];
         if (!isERC721) {
             require(
@@ -339,20 +336,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
                 value: payout
             }("");
             require(success, string(reason));
-
-            // test that or this
-            // (bool success, bytes memory result) = address(_impl).delegatecall(
-            //     signature
-            // );
-            // if (success == false) {
-            //     assembly {
-            //         let ptr := mload(0x40)
-            //         let size := returndatasize()
-            //         returndatacopy(ptr, 0, size)
-            //         revert(ptr, size)
-            //     }
-            // }
-            // return result;
         }
 
         emit ClaimFunds(msg.sender, tokenAddress, payout);
@@ -418,7 +401,6 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         NftContract.safeTransferFrom(msg.sender, address(this), id, 1, "");
 
         emit NewAuction(auctionId, auctions[auctionId]);
-
         return auctionId;
     }
 
@@ -438,8 +420,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "This contract is deprecated"
         );
         require(
-            keccak256(bytes(getAuctionStatus(auctionId))) ==
-                keccak256(bytes("ACTIVE")),
+            getAuctionStatus(auctionId) == "ACTIVE",
             "auction is not active"
         );
         uint256 totalAmount = amountFromBalance +
@@ -530,10 +511,9 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
                 msg.sender == auctions[auctionId].owner,
             "cannot claim nft"
         );
-        bytes32 status = keccak256(bytes(getAuctionStatus(auctionId)));
+        bytes32 status = getAuctionStatus(auctionId);
         require(
-            status == keccak256(bytes("CANCELLED")) ||
-                status == keccak256(bytes("ENDED")),
+            status == "CANCELLED" || status == "ENDED",
             "nft not available for claiming"
         );
         INFT Nft = INFT(auctions[auctionId].nftAddress);
@@ -588,8 +568,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     /// @dev prevents assets from being stuck if winner does not claim
     function resolveAuction(uint256 auctionId) external onlyOwner {
         require(
-            keccak256(bytes(getAuctionStatus(auctionId))) ==
-                keccak256(bytes("ENDED")),
+            getAuctionStatus(auctionId) == "ENDED",
             "can only resolve ENDED"
         );
         uint256 winningBid = bids[auctionId][highestBid[auctionId]].amount;
@@ -621,10 +600,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "only owner or sale creator"
         );
         require(
-            keccak256(bytes(getAuctionStatus(auctionId))) ==
-                keccak256(bytes("ACTIVE")) ||
-                keccak256(bytes(getAuctionStatus(auctionId))) ==
-                keccak256(bytes("PENDING")),
+            getAuctionStatus(auctionId) == "ACTIVE" ||
+                getAuctionStatus(auctionId) == "PENDING",
             "must be active or pending"
         );
         cancelledAuction[auctionId] = true;
@@ -676,17 +653,15 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         return highestBid[auctionId];
     }
 
-    function getAuctionStatus(uint256 auctionId)
-        public
-        view
-        returns (string memory)
-    {
+    function getAuctionStatus(uint256 auctionId) public view returns (bytes32) {
         require(
             auctionId <= _auctionId.current() && auctionId > 0,
             "auction does not exist"
         );
-        if (cancelledAuction[auctionId] || !Registry.isPlatformContract(address(this)))
-            return "CANCELLED";
+        if (
+            cancelledAuction[auctionId] ||
+            !Registry.isPlatformContract(address(this))
+        ) return "CANCELLED";
         if (claimed[auctionId]) return "ENDED & CLAIMED";
         if (block.timestamp < auctions[auctionId].startTime) return "PENDING";
         if (
