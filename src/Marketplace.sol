@@ -133,15 +133,15 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         address currency
     ) external nonReentrant returns (uint256) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
-        INFT NftContract = INFT(nftAddress);
+        INFT nftContract = INFT(nftAddress);
         if (isERC721) {
             require(
-                NftContract.ownerOf(nftId) == msg.sender,
+                nftContract.ownerOf(nftId) == msg.sender,
                 "The caller is not the nft owner"
             );
         } else {
             require(
-                NftContract.balanceOf(msg.sender, nftId) >= amount,
+                nftContract.balanceOf(msg.sender, nftId) >= amount,
                 "Insufficient NFT balance"
             );
         }
@@ -164,9 +164,9 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
         // transfer nft to the platform
         if (isERC721) {
-            NftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
+            nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
         } else {
-            NftContract.safeTransferFrom(
+            nftContract.safeTransferFrom(
                 msg.sender,
                 address(this),
                 nftId,
@@ -383,8 +383,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         address currency
     ) external nonReentrant returns (uint256) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
-        INFT NftContract = INFT(nftAddress);
-        require(NftContract.balanceOf(msg.sender, id) > 0, "does not own NFT");
+        INFT nftContract = INFT(nftAddress);
+        require(nftContract.balanceOf(msg.sender, id) > 0, "does not own NFT");
 
         _auctionId.increment();
         uint256 auctionId = _auctionId.current();
@@ -400,7 +400,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             currency: currency
         });
 
-        NftContract.safeTransferFrom(msg.sender, address(this), id, 1, "");
+        nftContract.safeTransferFrom(msg.sender, address(this), id, 1, "");
 
         emit NewAuction(auctionId, auctions[auctionId]);
         return auctionId;
@@ -431,11 +431,11 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             bids[auctionId][msg.sender].amount;
         require(
             totalAmount > bids[auctionId][highestBid[auctionId]].amount,
-            "bid not high enough"
+            "bid is not high enough"
         );
         require(
             totalAmount >= auctions[auctionId].reservePrice,
-            "bid is lower than reserve price"
+            "bid is lower than the reserve price"
         );
         require(
             amountFromBalance <=
@@ -444,16 +444,11 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         );
 
         if (auctions[auctionId].currency != ETH) {
-            IERC20 Token = IERC20(auctions[auctionId].currency);
+            IERC20 token = IERC20(auctions[auctionId].currency);
 
-            Token.safeTransferFrom(msg.sender, address(this), externalFunds);
+            token.safeTransferFrom(msg.sender, address(this), externalFunds);
         } else {
             require(msg.value == externalFunds, "mismatch of value and args");
-            require(
-                msg.value + amountFromBalance >
-                    bids[auctionId][highestBid[auctionId]].amount,
-                "insufficient ETH sent"
-            );
         }
 
         // next highest bid can be made claimable now,
