@@ -2,10 +2,8 @@
 pragma solidity ^0.8.15;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./interfaces/marketplace/IRegistry.sol";
+import "./interfaces/IRegistry.sol";
 
-/// @title Registry for an NFT matketplace
-/// @author Linum Labs
 contract Registry is IRegistry, Ownable {
     mapping(address => bool) private platformContracts;
     mapping(address => bool) private approvedCurrencies;
