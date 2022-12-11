@@ -24,7 +24,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
     Counters.Counter private _saleId; // _saleId starts from 1
     Counters.Counter private _auctionId; // _autionId starts from 1
-    IRegistry private Registry;
+    IRegistry private _registry;
 
     event SaleCreated(
         uint256 indexed id,
@@ -94,22 +94,21 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     }
 
     mapping(uint256 => SaleInfo) public sales;
-    mapping(uint256 => bool) private cancelledSale;
+    mapping(uint256 => AuctionInfo) public auctions;
+    mapping(uint256 => bool) public cancelledSale;
+    mapping(uint256 => bool) public cancelledAuction;
+    mapping(uint256 => bool) public claimed;
+    mapping(uint256 => address) public highestBidder;
+    mapping(address => uint256) public escrow;
     // saleId => userAddress => amountPurchased
     mapping(uint256 => mapping(address => uint256)) public purchased;
-    // userAddress => tokenAddress => amount
-    mapping(address => mapping(address => uint256)) public claimableFunds;
-
-    mapping(uint256 => AuctionInfo) private auctions;
-    mapping(uint256 => bool) private cancelledAuction;
-    mapping(uint256 => bool) private claimed;
-    mapping(uint256 => address) private highestBidder;
     // auctionId => userAddress => Bid
-    mapping(uint256 => mapping(address => Bid)) private bids;
-    mapping(address => uint256) private escrow;
+    mapping(uint256 => mapping(address => Bid)) private _bids;
+    // userAddress => tokenAddress => amount
+    mapping(address => mapping(address => uint256)) private _claimableFunds;
 
     constructor(address registry) {
-        Registry = IRegistry(registry);
+        _registry = IRegistry(registry);
     }
 
     /// @notice Creates a sale of ERC1155 and ERC721 NFTs
@@ -195,7 +194,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 amountFromBalance
     ) external payable nonReentrant returns (bool) {
         require(
-            Registry.isPlatformContract(address(this)),
+            _registry.isPlatformContract(address(this)),
             "This contract is deprecated"
         );
         require(getSaleStatus(saleId) == "ACTIVE", "Sale is not active");
@@ -208,7 +207,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         }
         address currency = currentSale.currency;
         require(
-            amountFromBalance <= claimableFunds[msg.sender][currency],
+            amountFromBalance <= _claimableFunds[msg.sender][currency],
             "Not enough balance"
         );
 
@@ -237,25 +236,25 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             );
         }
         if (amountFromBalance > 0) {
-            claimableFunds[msg.sender][currency] -= amountFromBalance;
+            _claimableFunds[msg.sender][currency] -= amountFromBalance;
         }
 
         // system fee
-        (address systemWallet, uint256 fee) = Registry.feeInfo(
+        (address systemWallet, uint256 fee) = _registry.feeInfo(
             amountToBuy * currentSale.price
         );
-        claimableFunds[systemWallet][currency] += fee;
+        _claimableFunds[systemWallet][currency] += fee;
 
         // artist royalty if artist isn't the seller
         if (currentSale.owner != artistAddress) {
-            claimableFunds[artistAddress][currency] += royalties;
+            _claimableFunds[artistAddress][currency] += royalties;
         } else {
             // since the artist is the seller
             royalties = 0;
         }
 
         // seller gains
-        claimableFunds[currentSale.owner][currency] +=
+        _claimableFunds[currentSale.owner][currency] +=
             (amountToBuy * currentSale.price) -
             fee -
             royalties;
@@ -327,13 +326,13 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     /// @notice Withdraws in-contract balance of a particular token
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     function claimFunds(address tokenAddress) external {
-        uint256 payout = claimableFunds[msg.sender][tokenAddress];
+        uint256 payout = _claimableFunds[msg.sender][tokenAddress];
         require(payout > 0, "Nothing to claim");
         if (tokenAddress != ETH) {
-            delete claimableFunds[msg.sender][tokenAddress];
+            delete _claimableFunds[msg.sender][tokenAddress];
             IERC20(tokenAddress).safeTransfer(msg.sender, payout);
         } else {
-            delete claimableFunds[msg.sender][tokenAddress];
+            delete _claimableFunds[msg.sender][tokenAddress];
             (bool success, bytes memory reason) = msg.sender.call{
                 value: payout
             }("");
@@ -418,7 +417,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 externalFunds
     ) external payable nonReentrant returns (bool) {
         require(
-            Registry.isPlatformContract(address(this)) == true,
+            _registry.isPlatformContract(address(this)) == true,
             "This contract is deprecated"
         );
         require(
@@ -428,9 +427,9 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 totalAmount = amountFromBalance +
             externalFunds +
             // this allows the top bidder to top off their bid
-            bids[auctionId][msg.sender].amount;
+            _bids[auctionId][msg.sender].amount;
         require(
-            totalAmount > bids[auctionId][highestBidder[auctionId]].amount,
+            totalAmount > _bids[auctionId][highestBidder[auctionId]].amount,
             "bid is not high enough"
         );
         require(
@@ -439,7 +438,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         );
         address currency = auctions[auctionId].currency;
         require(
-            amountFromBalance <= claimableFunds[msg.sender][currency],
+            amountFromBalance <= _claimableFunds[msg.sender][currency],
             "not enough balance"
         );
 
@@ -453,29 +452,29 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         // next highest bid can be made claimable now,
         // also helps for figuring out how much more net is in escrow
         address lastBidder = highestBidder[auctionId];
-        uint256 lastAmount = bids[auctionId][lastBidder].amount;
+        uint256 lastAmount = _bids[auctionId][lastBidder].amount;
         escrow[currency] += totalAmount - lastAmount;
 
-        if (bids[auctionId][msg.sender].bidder == address(0)) {
-            bids[auctionId][msg.sender].bidder = msg.sender;
+        if (_bids[auctionId][msg.sender].bidder == address(0)) {
+            _bids[auctionId][msg.sender].bidder = msg.sender;
         }
 
         // last bidder can claim their fund now
         if (lastBidder != msg.sender) {
-            delete bids[auctionId][lastBidder].amount;
-            claimableFunds[lastBidder][currency] += lastAmount;
+            delete _bids[auctionId][lastBidder].amount;
+            _claimableFunds[lastBidder][currency] += lastAmount;
             emit BalanceUpdated(
                 lastBidder,
                 currency,
-                claimableFunds[lastBidder][currency]
+                _claimableFunds[lastBidder][currency]
             );
         }
         if (amountFromBalance > 0) {
-            claimableFunds[msg.sender][currency] -= amountFromBalance;
+            _claimableFunds[msg.sender][currency] -= amountFromBalance;
             emit BalanceUpdated(msg.sender, currency, amountFromBalance);
         }
-        bids[auctionId][msg.sender].amount = totalAmount;
-        bids[auctionId][msg.sender].timestamp = block.timestamp;
+        _bids[auctionId][msg.sender].amount = totalAmount;
+        _bids[auctionId][msg.sender].timestamp = block.timestamp;
         highestBidder[auctionId] = msg.sender;
 
         emit BidPlaced(auctionId, totalAmount);
@@ -505,7 +504,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "nft is not available for claiming"
         );
         INFT nftContract = INFT(auctionInfo.nftAddress);
-        uint256 highestBid = bids[auctionId][winnerAddress].amount;
+        uint256 highestBid = _bids[auctionId][winnerAddress].amount;
         uint256 totalFundsToPay = msg.sender == auctionInfo.owner
             ? 0
             : highestBid;
@@ -548,7 +547,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             getAuctionStatus(auctionId) == "ENDED",
             "can only resolve after the auction ends"
         );
-        uint256 winningBid = bids[auctionId][highestBidder[auctionId]].amount;
+        uint256 winningBid = _bids[auctionId][highestBidder[auctionId]].amount;
         require(winningBid > 0, "no bids: cannot resolve");
 
         INFT nftContract = INFT(auctions[auctionId].nftAddress);
@@ -566,7 +565,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             auctions[auctionId].id,
             msg.sender,
             highestBidder[auctionId],
-            bids[auctionId][highestBidder[auctionId]].amount
+            _bids[auctionId][highestBidder[auctionId]].amount
         );
     }
 
@@ -585,15 +584,15 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
         address currency = auctions[auctionId].currency;
         address highestBidder = highestBidder[auctionId];
-        uint256 _highestBid = bids[auctionId][highestBidder].amount;
+        uint256 _highestBid = _bids[auctionId][highestBidder].amount;
 
         // current highest bid moves from escrow to being reclaimable
         escrow[currency] -= _highestBid;
-        claimableFunds[highestBidder][currency] += _highestBid;
+        _claimableFunds[highestBidder][currency] += _highestBid;
         emit BalanceUpdated(
             highestBidder,
             currency,
-            claimableFunds[highestBidder][currency]
+            _claimableFunds[highestBidder][currency]
         );
         emit AuctionCancelled(auctionId);
     }
@@ -618,7 +617,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         view
         returns (Bid memory)
     {
-        return bids[auctionId][bidder];
+        return _bids[auctionId][bidder];
     }
 
     /// @notice Returns the address of the current highest bidder in a particular auction
@@ -637,7 +636,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         );
         if (
             cancelledAuction[auctionId] ||
-            !Registry.isPlatformContract(address(this))
+            !_registry.isPlatformContract(address(this))
         ) return "CANCELLED";
         if (claimed[auctionId]) return "ENDED & CLAIMED";
         if (block.timestamp < auctions[auctionId].startTime) return "PENDING";
@@ -661,7 +660,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "Sale does not exist"
         );
         if (
-            cancelledSale[saleId] || !Registry.isPlatformContract(address(this))
+            cancelledSale[saleId] ||
+            !_registry.isPlatformContract(address(this))
         ) return "CANCELLED";
         else if (block.timestamp < sales[saleId].startTime) return "PENDING";
         else if (
@@ -682,7 +682,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         view
         returns (uint256)
     {
-        return claimableFunds[account][token];
+        return _claimableFunds[account][token];
     }
 
     function _beforeSaleOrAuction(
@@ -692,15 +692,15 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         address currency
     ) private {
         require(
-            Registry.isPlatformContract(nftAddress),
+            _registry.isPlatformContract(nftAddress),
             "NFT is not in approved contract"
         );
         require(
-            Registry.isPlatformContract(address(this)),
+            _registry.isPlatformContract(address(this)),
             "This contract is deprecated"
         );
         require(
-            Registry.isApprovedCurrency(currency),
+            _registry.isApprovedCurrency(currency),
             "Currency is not supported"
         );
         require(
@@ -724,36 +724,36 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         );
 
         // system fee
-        (address systemWallet, uint256 fee) = Registry.feeInfo(fundsToPay);
+        (address systemWallet, uint256 fee) = _registry.feeInfo(fundsToPay);
         fundsToPay -= fee;
-        claimableFunds[systemWallet][auctions[auctionId].currency] += fee;
+        _claimableFunds[systemWallet][auctions[auctionId].currency] += fee;
         emit BalanceUpdated(
             systemWallet,
             auctions[auctionId].currency,
-            claimableFunds[systemWallet][auctions[auctionId].currency]
+            _claimableFunds[systemWallet][auctions[auctionId].currency]
         );
 
         // artist royalty if artist isn't the seller
         if (auctions[auctionId].owner != artistAddress) {
             fundsToPay -= royalties;
-            claimableFunds[artistAddress][
+            _claimableFunds[artistAddress][
                 auctions[auctionId].currency
             ] += royalties;
             emit BalanceUpdated(
                 artistAddress,
                 auctions[auctionId].currency,
-                claimableFunds[artistAddress][auctions[auctionId].currency]
+                _claimableFunds[artistAddress][auctions[auctionId].currency]
             );
         }
 
         // seller gains
-        claimableFunds[auctions[auctionId].owner][
+        _claimableFunds[auctions[auctionId].owner][
             auctions[auctionId].currency
         ] += fundsToPay;
         emit BalanceUpdated(
             auctions[auctionId].owner,
             auctions[auctionId].currency,
-            claimableFunds[auctions[auctionId].owner][
+            _claimableFunds[auctions[auctionId].owner][
                 auctions[auctionId].currency
             ]
         );
