@@ -91,19 +91,19 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 timestamp;
     }
 
-    // saleId => SaleInfo
     mapping(uint256 => SaleInfo) public sales;
     mapping(uint256 => bool) private cancelledSale;
+    // saleId => userAddress => amountPurchased
     mapping(uint256 => mapping(address => uint256)) public purchased;
-    // user address => tokenAddress => amount
+    // userAddress => tokenAddress => amount
     mapping(address => mapping(address => uint256)) public claimableFunds;
 
     mapping(uint256 => AuctionInfo) private auctions;
     mapping(uint256 => bool) private cancelledAuction;
     mapping(uint256 => bool) private claimed;
-    mapping(uint256 => address) private highestBid;
+    mapping(uint256 => address) private highestBidder;
+    // auctionId => userAddress => Bid
     mapping(uint256 => mapping(address => Bid)) private bids;
-    // token => amount
     mapping(address => uint256) private escrow;
 
     constructor(address registry) {
@@ -428,22 +428,21 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             // this allows the top bidder to top off their bid
             bids[auctionId][msg.sender].amount;
         require(
-            totalAmount > bids[auctionId][highestBid[auctionId]].amount,
+            totalAmount > bids[auctionId][highestBidder[auctionId]].amount,
             "bid is not high enough"
         );
         require(
             totalAmount >= auctions[auctionId].reservePrice,
             "bid is lower than the reserve price"
         );
+        address currency = auctions[auctionId].currency;
         require(
-            amountFromBalance <=
-                claimableFunds[msg.sender][auctions[auctionId].currency],
+            amountFromBalance <= claimableFunds[msg.sender][currency],
             "not enough balance"
         );
 
-        if (auctions[auctionId].currency != ETH) {
-            IERC20 token = IERC20(auctions[auctionId].currency);
-
+        if (currency != ETH) {
+            IERC20 token = IERC20(currency);
             token.safeTransferFrom(msg.sender, address(this), externalFunds);
         } else {
             require(msg.value == externalFunds, "mismatch of value and args");
@@ -451,9 +450,9 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
         // next highest bid can be made claimable now,
         // also helps for figuring out how much more net is in escrow
-        address lastBidder = highestBid[auctionId];
+        address lastBidder = highestBidder[auctionId];
         uint256 lastAmount = bids[auctionId][lastBidder].amount;
-        escrow[auctions[auctionId].currency] += totalAmount - lastAmount;
+        escrow[currency] += totalAmount - lastAmount;
 
         if (bids[auctionId][msg.sender].bidder == address(0)) {
             bids[auctionId][msg.sender].bidder = msg.sender;
@@ -462,32 +461,22 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         // last bidder can claim their fund now
         if (lastBidder != msg.sender) {
             delete bids[auctionId][lastBidder].amount;
-            claimableFunds[lastBidder][
-                auctions[auctionId].currency
-            ] += lastAmount;
+            claimableFunds[lastBidder][currency] += lastAmount;
             emit BalanceUpdated(
                 lastBidder,
-                auctions[auctionId].currency,
-                claimableFunds[lastBidder][auctions[auctionId].currency]
+                currency,
+                claimableFunds[lastBidder][currency]
             );
         }
         if (amountFromBalance > 0) {
-            claimableFunds[msg.sender][
-                auctions[auctionId].currency
-            ] -= amountFromBalance;
-            emit BalanceUpdated(
-                msg.sender,
-                auctions[auctionId].currency,
-                amountFromBalance
-            );
+            claimableFunds[msg.sender][currency] -= amountFromBalance;
+            emit BalanceUpdated(msg.sender, currency, amountFromBalance);
         }
         bids[auctionId][msg.sender].amount = totalAmount;
         bids[auctionId][msg.sender].timestamp = block.timestamp;
-
-        highestBid[auctionId] = msg.sender;
+        highestBidder[auctionId] = msg.sender;
 
         emit BidPlaced(auctionId, totalAmount);
-
         return true;
     }
 
@@ -502,9 +491,10 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         external
         returns (bool)
     {
+        address winnerAddress = highestBidder[auctionId];
+        AuctionInfo memory auctionInfo = auctions[auctionId];
         require(
-            msg.sender == highestBid[auctionId] ||
-                msg.sender == auctions[auctionId].owner,
+            msg.sender == winnerAddress || msg.sender == auctionInfo.owner,
             "only the winner or the auctioner can claim"
         );
         bytes32 status = getAuctionStatus(auctionId);
@@ -512,21 +502,21 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             status == "CANCELLED" || status == "ENDED",
             "nft is not available for claiming"
         );
-        INFT nftContract = INFT(auctions[auctionId].nftAddress);
-        uint256 totalFundsToPay = msg.sender == auctions[auctionId].owner
+        INFT nftContract = INFT(auctionInfo.nftAddress);
+        uint256 highestBid = bids[auctionId][winnerAddress].amount;
+        uint256 totalFundsToPay = msg.sender == auctionInfo.owner
             ? 0
-            : bids[auctionId][highestBid[auctionId]].amount;
-        if (msg.sender == highestBid[auctionId]) {
+            : highestBid;
+        if (msg.sender == winnerAddress) {
             require(
-                block.timestamp > auctions[auctionId].endTime,
+                block.timestamp > auctionInfo.endTime,
                 "cannot claim from the auction"
             );
         } else {
             require(
                 cancelledAuction[auctionId] ||
-                    (bids[auctionId][highestBid[auctionId]].amount <
-                        auctions[auctionId].reservePrice &&
-                        block.timestamp > auctions[auctionId].endTime),
+                    (highestBid < auctionInfo.reservePrice &&
+                        block.timestamp > auctionInfo.endTime),
                 "owner cannot reclaim nft"
             );
         }
@@ -539,19 +529,13 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         nftContract.safeTransferFrom(
             address(this),
             recipient,
-            auctions[auctionId].nftId,
+            auctionInfo.nftId,
             1,
             ""
         );
         claimed[auctionId] = true;
 
-        emit ClaimNFT(
-            auctions[auctionId].nftId,
-            msg.sender,
-            recipient,
-            bids[auctionId][highestBid[auctionId]].amount
-        );
-
+        emit ClaimNFT(auctionInfo.nftId, msg.sender, recipient, highestBid);
         return true;
     }
 
@@ -562,14 +546,14 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             getAuctionStatus(auctionId) == "ENDED",
             "can only resolve after the auction ends"
         );
-        uint256 winningBid = bids[auctionId][highestBid[auctionId]].amount;
+        uint256 winningBid = bids[auctionId][highestBidder[auctionId]].amount;
         require(winningBid > 0, "no bids: cannot resolve");
+
         INFT nftContract = INFT(auctions[auctionId].nftAddress);
         _nftPayment(auctionId, winningBid, nftContract);
-
         nftContract.safeTransferFrom(
             address(this),
-            highestBid[auctionId],
+            highestBidder[auctionId],
             auctions[auctionId].nftId,
             1,
             ""
@@ -579,8 +563,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         emit ClaimNFT(
             auctions[auctionId].id,
             msg.sender,
-            highestBid[auctionId],
-            bids[auctionId][highestBid[auctionId]].amount
+            highestBidder[auctionId],
+            bids[auctionId][highestBidder[auctionId]].amount
         );
     }
 
@@ -596,18 +580,18 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "must be active or pending"
         );
         cancelledAuction[auctionId] = true;
-        // current highest bid moves from escrow to being reclaimable
-        address highestBidder = highestBid[auctionId];
+
+        address currency = auctions[auctionId].currency;
+        address highestBidder = highestBidder[auctionId];
         uint256 _highestBid = bids[auctionId][highestBidder].amount;
 
-        escrow[auctions[auctionId].currency] -= _highestBid;
-        claimableFunds[highestBidder][
-            auctions[auctionId].currency
-        ] += _highestBid;
+        // current highest bid moves from escrow to being reclaimable
+        escrow[currency] -= _highestBid;
+        claimableFunds[highestBidder][currency] += _highestBid;
         emit BalanceUpdated(
             highestBidder,
-            auctions[auctionId].currency,
-            claimableFunds[highestBidder][auctions[auctionId].currency]
+            currency,
+            claimableFunds[highestBidder][currency]
         );
         emit AuctionCancelled(auctionId);
     }
@@ -641,7 +625,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         view
         returns (address)
     {
-        return highestBid[auctionId];
+        return highestBidder[auctionId];
     }
 
     function getAuctionStatus(uint256 auctionId) public view returns (bytes32) {
