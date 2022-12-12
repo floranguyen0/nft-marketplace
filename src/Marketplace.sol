@@ -10,6 +10,8 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/INFT.sol";
 import "./interfaces/IRegistry.sol";
 
+/// @title Sale
+/// @author Linum Labs
 /// @notice Allows selling bundles of ERC1155 NFTs and ERC721 at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
@@ -17,12 +19,20 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
+    /*//////////////////////////////////////////////////////////////
+                          STATE VARIABLES
+    //////////////////////////////////////////////////////////////*/
+
     // address alias for using ETH as a currency
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
 
     Counters.Counter private _saleId; // _saleId starts from 1
     Counters.Counter private _auctionId; // _autionId starts from 1
     IRegistry private _registry;
+
+    /*//////////////////////////////////////////////////////////////
+                                EVENTS
+    //////////////////////////////////////////////////////////////*/
 
     event SaleCreated(
         uint256 indexed id,
@@ -61,6 +71,10 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 indexed newBalance
     );
 
+    /*//////////////////////////////////////////////////////////////
+                               STRUCTS
+    //////////////////////////////////////////////////////////////*/
+
     struct SaleInfo {
         bool isERC721;
         address nftAddress;
@@ -91,6 +105,10 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 timestamp;
     }
 
+    /*//////////////////////////////////////////////////////////////
+                               MAPPINGS
+    //////////////////////////////////////////////////////////////*/
+
     mapping(uint256 => SaleInfo) public sales;
     mapping(uint256 => AuctionInfo) public auctions;
     mapping(uint256 => bool) public cancelledSale;
@@ -105,9 +123,17 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     // userAddress => tokenAddress => amount
     mapping(address => mapping(address => uint256)) private _claimableFunds;
 
+    /*//////////////////////////////////////////////////////////////
+                          CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
     constructor(address registry) {
         _registry = IRegistry(registry);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                          STATE-CHANGING SALE FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Creates a sale of ERC1155 and ERC721 NFTs
     /// @dev NFT contract must be ERC2981-compliant and recognized by Registry
@@ -360,6 +386,10 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
         emit SaleCancelled(saleId);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                          STATE-CHANGING AUCTION FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Creates a first-price auction for a ERC1155 NFT
     /// @dev NFT contract must be ERC2981-compliant and recognized by Registry
@@ -644,6 +674,10 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         emit AuctionCancelled(auctionId);
     }
 
+    /*//////////////////////////////////////////////////////////////
+                          VIEW/PURE FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
     /// @dev the amount of an outbid bid is reduced to zero
     /// @return a Bid struct with details of a specific bid
     function getBidDetails(uint256 auctionId, address bidder)
@@ -717,6 +751,10 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         // 0xf23a6e61 = bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)")
         return 0xf23a6e61;
     }
+
+    /*//////////////////////////////////////////////////////////////
+                          VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     function _beforeSaleOrAuction(
         address nftAddress,
