@@ -5,19 +5,24 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IRegistry.sol";
 
 contract Registry is IRegistry, Ownable {
-    mapping(address => bool) private platformContracts;
-    mapping(address => bool) private approvedCurrencies;
     bool allowAllCurrencies;
     address systemWallet;
     // 3% tax on a 18 decimal asset
     uint256 fee = 300;
     uint256 scale = 1e4;
 
+    mapping(address => bool) private _platformContracts;
+    mapping(address => bool) private _approvedCurrencies;
+
     constructor() {
-        approvedCurrencies[
+        _approvedCurrencies[
             address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa)
         ] = true;
     }
+
+    /*//////////////////////////////////////////////////////////////
+                               STATE-CHANGING FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     function setSystemWallet(address newWallet) external override onlyOwner {
         systemWallet = newWallet;
@@ -41,8 +46,8 @@ contract Registry is IRegistry, Ownable {
         override
         onlyOwner
     {
-        if (platformContracts[toChange] != status) {
-            platformContracts[toChange] = status;
+        if (_platformContracts[toChange] != status) {
+            _platformContracts[toChange] = status;
             emit ContractStatusChanged(toChange, status);
         }
     }
@@ -54,8 +59,8 @@ contract Registry is IRegistry, Ownable {
     {
         require(!allowAllCurrencies, "All currencies are approved");
 
-        if (approvedCurrencies[tokenContract] == status) {
-            approvedCurrencies[tokenContract] = status;
+        if (_approvedCurrencies[tokenContract] == status) {
+            _approvedCurrencies[tokenContract] = status;
             emit CurrencyStatusChanged(tokenContract, status);
         }
     }
@@ -67,13 +72,17 @@ contract Registry is IRegistry, Ownable {
         }
     }
 
+    /*//////////////////////////////////////////////////////////////
+                               VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
     function isPlatformContract(address toCheck)
         external
         view
         override
         returns (bool)
     {
-        return platformContracts[toCheck];
+        return _platformContracts[toCheck];
     }
 
     function isApprovedCurrency(address tokenContract)
@@ -83,7 +92,7 @@ contract Registry is IRegistry, Ownable {
         returns (bool)
     {
         if (allowAllCurrencies) return true;
-        return approvedCurrencies[tokenContract];
+        return _approvedCurrencies[tokenContract];
     }
 
     function feeInfo(uint256 salePrice)
