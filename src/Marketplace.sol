@@ -99,7 +99,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     mapping(uint256 => address) public highestBidder;
     mapping(address => uint256) public escrow;
     // saleId => purchaserAddress => amountPurchased
-    mapping(uint256 => mapping(address => uint256)) public purchased;
+    mapping(uint256 => mapping(address => uint256)) private _purchased;
     // auctionId => bidderAddress => Bid
     mapping(uint256 => mapping(address => Bid)) private _bids;
     // userAddress => tokenAddress => amount
@@ -259,7 +259,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
         // update the sale info
         sales[saleId].purchased += amountToBuy;
-        purchased[saleId][msg.sender] += amountToBuy;
+        _purchased[saleId][msg.sender] += amountToBuy;
 
         // send the nft to the buyer
         if (isERC721) {
@@ -667,6 +667,14 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             sales[saleId].purchased == sales[saleId].amount
         ) return "ENDED";
         else revert("Error");
+    }
+
+    function getUserPurchased(uint256 saleId, address user)
+        external
+        view
+        returns (uint256)
+    {
+        return _purchased[saleId][user];
     }
 
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
