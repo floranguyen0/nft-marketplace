@@ -58,9 +58,9 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     event AuctionCancelled(uint256 indexed auctionId);
     event BidPlaced(uint256 auctionId, uint256 amount);
     event ClaimAuctionNFT(
-        uint256 auctionId,
-        address winner,
-        address recipient,
+        uint256 indexed auctionId,
+        address indexed winner,
+        address indexed recipient,
         uint256 amount
     );
     event BalanceUpdated(
@@ -470,7 +470,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         );
         require(
             getAuctionStatus(auctionId) == "ACTIVE",
-            "auction is not active"
+            "Auction is not active"
         );
         uint256 totalAmount = amountFromBalance +
             externalFunds +
@@ -478,23 +478,23 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             _bids[auctionId][msg.sender].amount;
         require(
             totalAmount > _bids[auctionId][highestBidder[auctionId]].amount,
-            "bid is not high enough"
+            "Bid is not high enough"
         );
         require(
             totalAmount >= auctions[auctionId].reservePrice,
-            "bid is lower than the reserve price"
+            "Bid is lower than the reserve price"
         );
         address currency = auctions[auctionId].currency;
         require(
             amountFromBalance <= _claimableFunds[msg.sender][currency],
-            "not enough balance"
+            "Not enough balance"
         );
 
         if (currency != ETH) {
             IERC20 token = IERC20(currency);
             token.safeTransferFrom(msg.sender, address(this), externalFunds);
         } else {
-            require(msg.value == externalFunds, "mismatch of value and args");
+            require(msg.value == externalFunds, "Mismatch of value and args");
         }
 
         // next highest bid can be made claimable now,
@@ -538,18 +538,18 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     {
         require(
             recipient != address(0),
-            "recipient cannot be the zero address"
+            "Recipient cannot be the zero address"
         );
         address winnerAddress = highestBidder[auctionId];
         AuctionInfo memory auctionInfo = auctions[auctionId];
         require(
             msg.sender == winnerAddress || msg.sender == auctionInfo.owner,
-            "only the winner or the auctioner can claim"
+            "Only the winner or the auctioner can claim"
         );
         bytes32 status = getAuctionStatus(auctionId);
         require(
             status == "CANCELLED" || status == "ENDED",
-            "nft is not available for claiming"
+            "Nft is not available for claiming"
         );
         INFT nftContract = INFT(auctionInfo.nftAddress);
         uint256 highestBid = _bids[auctionId][winnerAddress].amount;
@@ -559,14 +559,14 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         if (msg.sender == winnerAddress) {
             require(
                 block.timestamp > auctionInfo.endTime,
-                "cannot claim from the auction"
+                "Cannot claim from the auction"
             );
         } else {
             require(
                 cancelledAuction[auctionId] ||
                     (highestBid < auctionInfo.reservePrice &&
                         block.timestamp > auctionInfo.endTime),
-                "owner cannot reclaim nft"
+                "Owner cannot reclaim nft"
             );
         }
 
@@ -608,11 +608,11 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     function resolveAuction(uint256 auctionId) external onlyOwner {
         require(
             getAuctionStatus(auctionId) == "ENDED",
-            "can only resolve after the auction ends"
+            "Can only resolve after the auction ends"
         );
         address highestBidder_ = highestBidder[auctionId];
         uint256 winningBid = _bids[auctionId][highestBidder_].amount;
-        require(winningBid > 0, "no bids: cannot resolve");
+        require(winningBid > 0, "No bids: cannot resolve");
 
         AuctionInfo memory auctionInfo = auctions[auctionId];
         INFT nftContract = INFT(auctionInfo.nftAddress);
@@ -648,12 +648,12 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     function cancelAuction(uint256 auctionId) external {
         require(
             msg.sender == auctions[auctionId].owner || msg.sender == owner(),
-            "only owner or sale creator"
+            "Only owner or sale creator"
         );
         require(
             getAuctionStatus(auctionId) == "ACTIVE" ||
                 getAuctionStatus(auctionId) == "PENDING",
-            "must be active or pending"
+            "Must be active or pending"
         );
         cancelledAuction[auctionId] = true;
 
@@ -689,7 +689,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     function getAuctionStatus(uint256 auctionId) public view returns (bytes32) {
         require(
             auctionId <= _auctionId.current() && auctionId > 0,
-            "auction does not exist"
+            "Auction does not exist"
         );
         if (
             cancelledAuction[auctionId] ||
@@ -711,8 +711,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             "Sale does not exist"
         );
         if (
-            cancelledSale[saleId] ||
-            !_registry.platformContracts(address(this))
+            cancelledSale[saleId] || !_registry.platformContracts(address(this))
         ) return "CANCELLED";
         else if (block.timestamp < sales[saleId].startTime) return "PENDING";
         else if (
@@ -723,7 +722,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             block.timestamp >= sales[saleId].endTime ||
             sales[saleId].purchased == sales[saleId].amount
         ) return "ENDED";
-        else revert("Error");
+        else revert("Unexpected error");
     }
 
     function getUserPurchased(uint256 saleId, address user)
