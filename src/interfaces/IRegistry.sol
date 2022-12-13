@@ -2,11 +2,6 @@
 pragma solidity ^0.8.15;
 
 interface IRegistry {
-    event SystemWalletUpdated(address newWallet);
-    event FeeVariablesChanged(uint256 indexed newFee, uint256 indexed newScale);
-    event ContractStatusChanged(address indexed changed, bool indexed status);
-    event CurrencyStatusChanged(address indexed changed, bool indexed status);
-
     /// @notice Given a sum, returns the address of the platforms's wallet and fees due
     /// @dev structured similar to ERC2981
     /// @param _salePrice the uint256 amount being paid
@@ -20,14 +15,14 @@ interface IRegistry {
     /// @dev no validation is done to verify a contract exists at the address
     /// @param toCheck the address of the contract to check
     /// @return bool if the contract is approved by the registry
-    function isPlatformContract(address toCheck) external view returns (bool);
+    function platformContracts(address toCheck) external view returns (bool);
 
     /// @notice Returns if a token is approved for use on the platform
     /// @dev no validation is done to verify a token contract exists at the address
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     /// @param tokenContract the address of the token to check
     /// @return bool if the token is approved for use on the platform
-    function isApprovedCurrency(address tokenContract)
+    function approvedCurrencies(address tokenContract)
         external
         view
         returns (bool);

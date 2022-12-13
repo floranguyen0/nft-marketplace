@@ -216,7 +216,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 amountFromBalance
     ) external payable nonReentrant returns (bool) {
         require(
-            _registry.isPlatformContract(address(this)),
+            _registry.platformContracts(address(this)),
             "This contract is deprecated"
         );
         require(getSaleStatus(saleId) == "ACTIVE", "Sale is not active");
@@ -465,7 +465,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 externalFunds
     ) external payable nonReentrant returns (bool) {
         require(
-            _registry.isPlatformContract(address(this)) == true,
+            _registry.platformContracts(address(this)) == true,
             "This contract is deprecated"
         );
         require(
@@ -693,7 +693,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         );
         if (
             cancelledAuction[auctionId] ||
-            !_registry.isPlatformContract(address(this))
+            !_registry.platformContracts(address(this))
         ) return "CANCELLED";
         if (claimed[auctionId]) return "ENDED & CLAIMED";
         if (block.timestamp < auctions[auctionId].startTime) return "PENDING";
@@ -712,7 +712,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         );
         if (
             cancelledSale[saleId] ||
-            !_registry.isPlatformContract(address(this))
+            !_registry.platformContracts(address(this))
         ) return "CANCELLED";
         else if (block.timestamp < sales[saleId].startTime) return "PENDING";
         else if (
@@ -761,15 +761,15 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         address currency
     ) private {
         require(
-            _registry.isPlatformContract(nftAddress),
+            _registry.platformContracts(nftAddress),
             "NFT is not in approved contract"
         );
         require(
-            _registry.isPlatformContract(address(this)),
+            _registry.platformContracts(address(this)),
             "This contract is deprecated"
         );
         require(
-            _registry.isApprovedCurrency(currency),
+            _registry.approvedCurrencies(currency),
             "Currency is not supported"
         );
         require(
