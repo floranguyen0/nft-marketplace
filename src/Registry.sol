@@ -6,12 +6,17 @@ import "./interfaces/IRegistry.sol";
 
 /// @title Registry for an NFT matketplace
 /// @author Linum Labs
-contract Registry is IRegistry, Ownable {
+contract Registry is Ownable {
     bool allowAllCurrencies;
     address systemWallet;
     // 3% tax on a 18 decimal asset
     uint256 fee = 300;
     uint256 scale = 1e4;
+
+    event SystemWalletUpdated(address newWallet);
+    event FeeVariablesChanged(uint256 indexed newFee, uint256 indexed newScale);
+    event ContractStatusChanged(address indexed changed, bool indexed status);
+    event CurrencyStatusChanged(address indexed changed, bool indexed status);
 
     mapping(address => bool) public platformContracts;
     mapping(address => bool) public approvedCurrencies;
@@ -22,7 +27,7 @@ contract Registry is IRegistry, Ownable {
         ] = true;
     }
 
-    function setSystemWallet(address newWallet) external override onlyOwner {
+    function setSystemWallet(address newWallet) external onlyOwner {
         systemWallet = newWallet;
 
         emit SystemWalletUpdated(newWallet);
@@ -30,7 +35,6 @@ contract Registry is IRegistry, Ownable {
 
     function setFeeVariables(uint256 newFee, uint256 newScale)
         external
-        override
         onlyOwner
     {
         fee = newFee;
@@ -41,7 +45,6 @@ contract Registry is IRegistry, Ownable {
 
     function setContractStatus(address toChange, bool status)
         external
-        override
         onlyOwner
     {
         if (platformContracts[toChange] != status) {
@@ -52,7 +55,6 @@ contract Registry is IRegistry, Ownable {
 
     function setCurrencyStatus(address tokenContract, bool status)
         external
-        override
         onlyOwner
     {
         require(!allowAllCurrencies, "All currencies are approved");
@@ -63,7 +65,7 @@ contract Registry is IRegistry, Ownable {
         }
     }
 
-    function approveAllCurrencies() external override onlyOwner {
+    function approveAllCurrencies() external onlyOwner {
         if (!allowAllCurrencies) {
             allowAllCurrencies = true;
             emit CurrencyStatusChanged(address(0), true);
@@ -73,7 +75,6 @@ contract Registry is IRegistry, Ownable {
     function feeInfo(uint256 salePrice)
         external
         view
-        override
         returns (address, uint256)
     {
         return (systemWallet, ((salePrice * fee) / scale));
