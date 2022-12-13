@@ -13,7 +13,7 @@ contract Registry is Ownable {
     uint256 fee = 300;
     uint256 scale = 1e4;
 
-    event SystemWalletUpdated(address newWallet);
+    event SystemWalletUpdated(address indexed newWallet);
     event FeeVariablesChanged(uint256 indexed newFee, uint256 indexed newScale);
     event ContractStatusChanged(address indexed changed, bool indexed status);
     event CurrencyStatusChanged(address indexed changed, bool indexed status);
