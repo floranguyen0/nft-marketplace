@@ -13,18 +13,14 @@ contract Registry is IRegistry, Ownable {
     uint256 fee = 300;
     uint256 scale = 1e4;
 
-    mapping(address => bool) private _platformContracts;
-    mapping(address => bool) private _approvedCurrencies;
+    mapping(address => bool) public platformContracts;
+    mapping(address => bool) public approvedCurrencies;
 
     constructor() {
-        _approvedCurrencies[
+        approvedCurrencies[
             address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa)
         ] = true;
     }
-
-    /*//////////////////////////////////////////////////////////////
-                               STATE-CHANGING FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
 
     function setSystemWallet(address newWallet) external override onlyOwner {
         systemWallet = newWallet;
@@ -48,8 +44,8 @@ contract Registry is IRegistry, Ownable {
         override
         onlyOwner
     {
-        if (_platformContracts[toChange] != status) {
-            _platformContracts[toChange] = status;
+        if (platformContracts[toChange] != status) {
+            platformContracts[toChange] = status;
             emit ContractStatusChanged(toChange, status);
         }
     }
@@ -61,8 +57,8 @@ contract Registry is IRegistry, Ownable {
     {
         require(!allowAllCurrencies, "All currencies are approved");
 
-        if (_approvedCurrencies[tokenContract] == status) {
-            _approvedCurrencies[tokenContract] = status;
+        if (approvedCurrencies[tokenContract] == status) {
+            approvedCurrencies[tokenContract] = status;
             emit CurrencyStatusChanged(tokenContract, status);
         }
     }
@@ -72,29 +68,6 @@ contract Registry is IRegistry, Ownable {
             allowAllCurrencies = true;
             emit CurrencyStatusChanged(address(0), true);
         }
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                               VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    function isPlatformContract(address toCheck)
-        external
-        view
-        override
-        returns (bool)
-    {
-        return _platformContracts[toCheck];
-    }
-
-    function isApprovedCurrency(address tokenContract)
-        external
-        view
-        override
-        returns (bool)
-    {
-        if (allowAllCurrencies) return true;
-        return _approvedCurrencies[tokenContract];
     }
 
     function feeInfo(uint256 salePrice)
