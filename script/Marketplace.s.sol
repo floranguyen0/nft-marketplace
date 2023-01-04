@@ -2,7 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
+import "../src/Registry.sol";
+import "../src/Marketplace.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -16,7 +20,6 @@ contract NFT721 is ERC721, ERC2981, Ownable {
 
 contract NFT1155 is ERC1155, ERC2981, Ownable {
     constructor() ERC1155("baseURI") {}
-
     function mint(
         address to,
         uint256 id,
@@ -41,12 +44,16 @@ contract MockCurrency is ERC20 {
 }
 
 contract MarketplaceTest is Test {
-    Registry public registry;
-    Marketplace public market;
-    address addressA = vm.addr(A);
-    address addressB = vm.addr(B);
-    address addressC = vm.addr(C);
-    address addressD = vm.addr(D);
+    Registry registry;
+    Marketplace market;
+    NFT721 nft721;
+    NFT1155 nft1155;
+    MockCurrency mockCurrency;
+
+    address addressA = vm.addr(1);
+    address addressB = vm.addr(2);
+    address addressC = vm.addr(3);
+    address addressD = vm.addr(4);
 
     event SaleCreated(
         uint256 indexed id,
@@ -75,18 +82,18 @@ contract MarketplaceTest is Test {
         market = new Marketplace(address(registry));
         nft721 = new NFT721();
         nft1155 = new NFT1155();
-        mockCurrency = new Currency();
+        mockCurrency = new MockCurrency();
     }
 
     function testCreateSaleERC721() public {
         nft721.safeMint(addressA, 1);
-        pfp.createSale({
+        market.createSale({
             isERC721: true,
             nftAddress: address(nft721),
             nftId: 1,
             amount: 1,
-            startTime: block.timestamp(),
-            endTime: block.timestamp() + 3 days,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
             price: 100,
             currency: address(mockCurrency)
         });
