@@ -101,15 +101,24 @@ contract MarketplaceTest is Test {
     );
 
     function setUp() public {
+        // create contract instance
         registry = new Registry();
         market = new Marketplace(address(registry));
         nft721 = new NFT721();
         nft1155 = new NFT1155();
         mockCurrency = new MockCurrency();
+
+        // approve nft contracts and currency
+        registry.setContractStatus(address(market), true);
+        registry.setContractStatus(address(nft721), true);
+        registry.setContractStatus(address(nft1155), true);
+        registry.setCurrencyStatus(address(mockCurrency), true);
     }
 
     function testCreateSaleERC721() public {
         nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(market), 1);
         market.createSale({
             isERC721: true,
             nftAddress: address(nft721),
@@ -120,5 +129,22 @@ contract MarketplaceTest is Test {
             price: 100,
             currency: address(mockCurrency)
         });
+
+        // save sale info correctly
+        // assertEq(
+        //     market.sales(1),
+        //     SaleInfo({
+        //         isERC721: true,
+        //         nftAddress: address(nft721),
+        //         nftId: 1,
+        //         owner: msg.sender,
+        //         amount: 1,
+        //         purchased: 0,
+        //         startTime: block.timestamp,
+        //         endTime: block.timestamp + 3 days,
+        //         price: 100,
+        //         currency: address(mockCurrency)
+        //     })
+        // );
     }
 }
