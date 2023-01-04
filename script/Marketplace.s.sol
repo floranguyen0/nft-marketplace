@@ -13,6 +13,17 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract NFT721 is ERC721, ERC2981, Ownable {
     constructor() ERC721("NFT721", "NFT721") {}
 
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC2981, ERC721)
+        returns (bool)
+    {
+        return
+            ERC2981.supportsInterface(interfaceId) ||
+            ERC721.supportsInterface(interfaceId);
+    }
+
     function safeMint(address to, uint256 tokenId) external onlyOwner {
         _safeMint(to, tokenId, "");
     }
@@ -20,6 +31,18 @@ contract NFT721 is ERC721, ERC2981, Ownable {
 
 contract NFT1155 is ERC1155, ERC2981, Ownable {
     constructor() ERC1155("baseURI") {}
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC1155, ERC2981)
+        returns (bool)
+    {
+        return
+            ERC2981.supportsInterface(interfaceId) ||
+            ERC1155.supportsInterface(interfaceId);
+    }
+
     function mint(
         address to,
         uint256 id,
