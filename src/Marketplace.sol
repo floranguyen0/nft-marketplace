@@ -10,12 +10,12 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/INFT.sol";
 import "./interfaces/IRegistry.sol";
 
-/// @title Sale
+/// @title Marketplace
 /// @author Linum Labs
 /// @notice Allows selling bundles of ERC1155 NFTs and ERC721 at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
-contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
+contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
