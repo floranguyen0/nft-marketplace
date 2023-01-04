@@ -39,4 +39,44 @@ contract NFT1155 is ERC1155, ERC2981, Ownable {
         _mintBatch(to, ids, amounts, data);
     }
 }
+
+contract MarketplaceTest is Test {
+    Registry public registry;
+    Marketplace public market;
+    address addressA = vm.addr(A);
+    address addressB = vm.addr(B);
+    address addressC = vm.addr(C);
+    address addressD = vm.addr(D);
+
+    event SaleCreated(
+        uint256 indexed id,
+        address indexed nftAddress,
+        uint256 indexed nftID
+    );
+    event SaleCancelled(uint256 indexed saleId);
+    event Purchase(
+        uint256 indexed saleId,
+        address indexed purchaser,
+        address indexed recipient
+    );
+    event ClaimSaleNFTs(
+        uint256 indexed id,
+        address indexed owner,
+        uint256 indexed amount
+    );
+    event ClaimFunds(
+        address indexed accountOf,
+        address indexed tokenAddress,
+        uint256 indexed newBalance
+    );
+
+    function setUp() public {
+        registry = new Registry();
+        market = new Marketplace(address(registry));
+        nft721 = new NFT721();
+        nft1155 = new NFT1155();
+    }
+
+    function testCreateSaleERC721() {
+    }
 }
