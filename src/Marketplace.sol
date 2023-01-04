@@ -13,7 +13,7 @@ import "./interfaces/IRegistry.sol";
 /// @notice Allows selling bundles of ERC1155 NFTs and ERC721 at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
-contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
+contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
@@ -24,8 +24,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
     // address alias for using ETH as a currency
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
 
-    Counters.Counter private _saleId; // _saleId starts from 1
-    Counters.Counter private _auctionId; // _autionId starts from 1
+    Counters.Counter public saleIdCounter; // saleIdCounter starts from 1
+    Counters.Counter public auctionIdCounter; // _autionId starts from 1
     IRegistry private _registry;
 
     /*//////////////////////////////////////////////////////////////
@@ -168,8 +168,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         }
 
         // save the sale info
-        _saleId.increment();
-        uint256 saleId = _saleId.current();
+        saleIdCounter.increment();
+        uint256 saleId = saleIdCounter.current();
 
         sales[saleId] = SaleInfo({
             isERC721: isERC721,
@@ -422,8 +422,8 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             );
         }
 
-        _auctionId.increment();
-        uint256 auctionId = _auctionId.current();
+        auctionIdCounter.increment();
+        uint256 auctionId = auctionIdCounter.current();
 
         auctions[auctionId] = AuctionInfo({
             isERC721: isERC721,
@@ -688,7 +688,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
     function getAuctionStatus(uint256 auctionId) public view returns (bytes32) {
         require(
-            auctionId <= _auctionId.current() && auctionId > 0,
+            auctionId <= auctionIdCounter.current() && auctionId > 0,
             "Auction does not exist"
         );
         if (
@@ -707,7 +707,7 @@ contract Sale is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
 
     function getSaleStatus(uint256 saleId) public view returns (bytes32) {
         require(
-            saleId <= _saleId.current() && saleId > 0,
+            saleId <= saleIdCounter.current() && saleId > 0,
             "Sale does not exist"
         );
         if (
