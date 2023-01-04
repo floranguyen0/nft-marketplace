@@ -68,7 +68,7 @@ contract MockCurrency is ERC20 {
 
 contract MarketplaceTest is Test {
     Registry registry;
-    Marketplace market;
+    Marketplace marketPlace;
     NFT721 nft721;
     NFT1155 nft1155;
     MockCurrency mockCurrency;
@@ -103,15 +103,66 @@ contract MarketplaceTest is Test {
     function setUp() public {
         // create contract instance
         registry = new Registry();
-        market = new Marketplace(address(registry));
+        marketPlace = new Marketplace(address(registry));
         nft721 = new NFT721();
         nft1155 = new NFT1155();
         mockCurrency = new MockCurrency();
 
         // approve nft contracts and currency
-        registry.setContractStatus(address(market), true);
+        registry.setContractStatus(address(marketPlace), true);
         registry.setContractStatus(address(nft721), true);
         registry.setContractStatus(address(nft1155), true);
         registry.setCurrencyStatus(address(mockCurrency), true);
+    }
+
+    function testCreateSaleERC721() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+
+        // emit the SaleCreated event correctly
+        vm.expectEmit(true, true, true, true);
+        emit SaleCreated(1, address(nft721), 1);
+
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+
+        // save sale info correctly
+        (
+            bool isERC721,
+            address nftAddress,
+            uint256 nftId,
+            address owner,
+            uint256 amount,
+            uint256 purchased,
+            uint256 startTime,
+            uint256 endTime,
+            uint256 price,
+            address currency
+        ) = marketPlace.sales(1);
+
+        assertEq(isERC721, true);
+        assertEq(nftAddress, address(nft721));
+        assertEq(nftId, 1);
+        assertEq(owner, address(addressA));
+        assertEq(amount, 1);
+        assertEq(purchased, 0);
+        assertEq(startTime, block.timestamp);
+        assertEq(endTime, block.timestamp + 3 days);
+        assertEq(price, 100);
+        assertEq(currency, address(mockCurrency));
+
+        // transfer nft to the platform
+        assertEq(nft721.balanceOf(address(marketPlace)), 1);
+        assertEq(nft721.ownerOf(1), address(marketPlace));
+        assertEq(nft721.balanceOf(address(addressA)), 0);
     }
 }
