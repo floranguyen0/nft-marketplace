@@ -34,6 +34,12 @@ contract NFT1155 is ERC1155, ERC2981, Ownable {
     }
 }
 
+contract MockCurrency is ERC20 {
+    constructor() ERC20("Mock Currency", "MC") {
+        _mint(address(this), 100_000 * 10**18);
+    }
+}
+
 contract MarketplaceTest is Test {
     Registry public registry;
     Marketplace public market;
@@ -69,9 +75,20 @@ contract MarketplaceTest is Test {
         market = new Marketplace(address(registry));
         nft721 = new NFT721();
         nft1155 = new NFT1155();
+        mockCurrency = new Currency();
     }
 
     function testCreateSaleERC721() public {
         nft721.safeMint(addressA, 1);
+        pfp.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp(),
+            endTime: block.timestamp() + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
     }
 }
