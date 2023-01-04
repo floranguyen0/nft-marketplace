@@ -41,13 +41,13 @@ contract Registry is Ownable {
         emit FeeVariablesChanged(newFee, newScale);
     }
 
-    function setContractStatus(address toChange, bool status)
+    function setContractStatus(address nftContract, bool status)
         external
         onlyOwner
     {
-        if (platformContracts[toChange] != status) {
-            platformContracts[toChange] = status;
-            emit ContractStatusChanged(toChange, status);
+        if (platformContracts[nftContract] != status) {
+            platformContracts[nftContract] = status;
+            emit ContractStatusChanged(nftContract, status);
         }
     }
 
@@ -57,7 +57,7 @@ contract Registry is Ownable {
     {
         require(!allowAllCurrencies, "All currencies are approved");
 
-        if (approvedCurrencies[tokenContract] == status) {
+        if (approvedCurrencies[tokenContract] != status) {
             approvedCurrencies[tokenContract] = status;
             emit CurrencyStatusChanged(tokenContract, status);
         }
