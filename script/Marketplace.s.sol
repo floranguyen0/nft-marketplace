@@ -9,11 +9,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract NFT721 is ERC721, ERC2981, Ownable {
     constructor() ERC721("NFT721", "NFT721") {}
 
-    function safeMint(
-        address to,
-        uint256 tokenId,
-        bytes memory data
-    ) external onlyOwner {
+    function safeMint(address to, uint256 tokenId) external onlyOwner {
         _safeMint(to, tokenId, "");
     }
 }
@@ -24,19 +20,17 @@ contract NFT1155 is ERC1155, ERC2981, Ownable {
     function mint(
         address to,
         uint256 id,
-        uint256 amount,
-        bytes memory data
+        uint256 amount
     ) external onlyOwner {
-        _mint(to, id, amount, data);
+        _mint(to, id, amount, "");
     }
 
     function mintBatch(
         address to,
         uint256[] memory ids,
-        uint256[] memory amounts,
-        bytes memory data
+        uint256[] memory amounts
     ) public onlyOwner {
-        _mintBatch(to, ids, amounts, data);
+        _mintBatch(to, ids, amounts, "");
     }
 }
 
@@ -77,6 +71,7 @@ contract MarketplaceTest is Test {
         nft1155 = new NFT1155();
     }
 
-    function testCreateSaleERC721() {
+    function testCreateSaleERC721() public {
+        nft721.safeMint(addressA, 1);
     }
 }
