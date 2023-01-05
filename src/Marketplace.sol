@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/INFT.sol";
 import "./interfaces/IRegistry.sol";
 
@@ -15,7 +14,7 @@ import "./interfaces/IRegistry.sol";
 /// @notice Allows selling bundles of ERC1155 NFTs and ERC721 at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
-contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
+contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
@@ -409,7 +408,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 endTime,
         uint256 reservePrice,
         address currency
-    ) external nonReentrant returns (uint256) {
+    ) external returns (uint256) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         INFT nftContract = INFT(nftAddress);
         if (isERC721) {
