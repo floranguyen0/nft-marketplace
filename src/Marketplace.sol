@@ -154,7 +154,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 endTime,
         uint256 price,
         address currency
-    ) external nonReentrant returns (uint256) {
+    ) external returns (uint256) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         INFT nftContract = INFT(nftAddress);
         if (isERC721) {
@@ -166,6 +166,19 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             require(
                 nftContract.balanceOf(msg.sender, nftId) >= amount,
                 "Insufficient NFT balance"
+            );
+        }
+
+        // transfer nft to the platform
+        if (isERC721) {
+            nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
+        } else {
+            nftContract.safeTransferFrom(
+                msg.sender,
+                address(this),
+                nftId,
+                amount,
+                ""
             );
         }
 
@@ -186,19 +199,6 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             currency: currency
         });
 
-        // transfer nft to the platform
-        if (isERC721) {
-            nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
-        } else {
-            nftContract.safeTransferFrom(
-                msg.sender,
-                address(this),
-                nftId,
-                amount,
-                ""
-            );
-        }
-
         emit SaleCreated(saleId, nftAddress, nftId);
         return saleId;
     }
@@ -216,7 +216,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         address recipient,
         uint256 amountToBuy,
         uint256 amountFromBalance
-    ) external payable nonReentrant returns (bool) {
+    ) external payable returns (bool) {
         require(
             _registry.platformContracts(address(this)),
             "This contract is deprecated"
@@ -424,6 +424,18 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             );
         }
 
+        if (isERC721) {
+            nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
+        } else {
+            nftContract.safeTransferFrom(
+                msg.sender,
+                address(this),
+                nftId,
+                1,
+                ""
+            );
+        }
+
         auctionIdCounter.increment();
         uint256 auctionId = auctionIdCounter.current();
 
@@ -439,18 +451,6 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
             currency: currency
         });
 
-        if (isERC721) {
-            nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
-        } else {
-            nftContract.safeTransferFrom(
-                msg.sender,
-                address(this),
-                nftId,
-                1,
-                ""
-            );
-        }
-
         emit NewAuction(auctionId, auctions[auctionId]);
         return auctionId;
     }
@@ -465,7 +465,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable, ReentrancyGuard {
         uint256 auctionId,
         uint256 amountFromBalance,
         uint256 externalFunds
-    ) external payable nonReentrant returns (bool) {
+    ) external payable returns (bool) {
         require(
             _registry.platformContracts(address(this)) == true,
             "This contract is deprecated"
