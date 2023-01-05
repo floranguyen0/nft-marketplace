@@ -154,17 +154,6 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     ) external returns (uint256) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         INFT nftContract = INFT(nftAddress);
-        if (isERC721) {
-            require(
-                nftContract.ownerOf(nftId) == msg.sender,
-                "The caller is not the nft owner"
-            );
-        } else {
-            require(
-                nftContract.balanceOf(msg.sender, nftId) >= amount,
-                "Insufficient NFT balance"
-            );
-        }
 
         // transfer nft to the platform
         if (isERC721) {
@@ -409,17 +398,6 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     ) external returns (uint256) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         INFT nftContract = INFT(nftAddress);
-        if (isERC721) {
-            require(
-                nftContract.ownerOf(nftId) == msg.sender,
-                "The caller is not the nft owner"
-            );
-        } else {
-            require(
-                nftContract.balanceOf(msg.sender, nftId) > 0,
-                "The caller is not the nft owner"
-            );
-        }
 
         if (isERC721) {
             nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
