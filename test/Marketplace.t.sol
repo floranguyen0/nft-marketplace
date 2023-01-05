@@ -10,6 +10,14 @@ import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+contract NFT is ERC721, Ownable {
+    constructor() ERC721("NFT", "NFT") {}
+
+    function safeMint(address to, uint256 tokenId) external onlyOwner {
+        _safeMint(to, tokenId, "");
+    }
+}
+
 contract NFT721 is ERC721, ERC2981, Ownable {
     constructor() ERC721("NFT721", "NFT721") {}
 
@@ -69,6 +77,7 @@ contract MockCurrency is ERC20 {
 contract MarketplaceTest is Test {
     Registry registry;
     Marketplace marketPlace;
+    NFT nft;
     NFT721 nft721;
     NFT1155 nft1155;
     MockCurrency mockCurrency;
@@ -216,5 +225,105 @@ contract MarketplaceTest is Test {
         // transfer nft to the platform
         assertEq(nft1155.balanceOf(address(marketPlace), 1), 5);
         assertEq(nft1155.balanceOf(address(addressB), 1), 5);
+    }
+
+    function testCreateSaleFailsNotApprovedContract() public {
+        registry.setContractStatus(address(nft721), false);
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+
+        vm.expectRevert("NFT is not in approved contract");
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
+    }
+
+    function testCreateSaleFailsContractDeptecated() public {
+        registry.setContractStatus(address(marketPlace), false);
+        nft721.safeMint(addressA, 2);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 2);
+
+        vm.expectRevert("This contract is deprecated");
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 2,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 5 days,
+            price: 300,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
+    }
+
+    function testCreateSaleFailsNotSupportedCurrency() public {
+        registry.setCurrencyStatus(address(mockCurrency), false);
+        nft721.safeMint(addressA, 2);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 2);
+
+        vm.expectRevert("Currency is not supported");
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 2,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 5 days,
+            price: 300,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
+    }
+
+    function testCreateSaleFailsContractNotSupportERC2981() public {
+        nft = new NFT();
+        registry.setContractStatus(address(nft), true);
+        nft.safeMint(addressA, 2);
+        vm.startPrank(addressA);
+        nft.approve(address(marketPlace), 2);
+
+        vm.expectRevert("Contract must support ERC2981");
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft),
+            nftId: 2,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 5 days,
+            price: 300,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
+    }
+
+    function testCreateSaleFailsInvalidStartEndTime() public {
+        nft721.safeMint(addressA, 2);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 2);
+
+        vm.expectRevert("Error in start/end params");
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 2,
+            amount: 1,
+            startTime: block.timestamp + 10 days,
+            endTime: block.timestamp + 5 days,
+            price: 300,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
     }
 }
