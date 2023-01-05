@@ -68,9 +68,11 @@ contract NFT1155 is ERC1155, ERC2981, Ownable {
     }
 }
 
-contract MockCurrency is ERC20 {
+contract MockCurrency is ERC20, Test {
+    address addressA = vm.addr(1);
+
     constructor() ERC20("Mock Currency", "MC") {
-        _mint(address(this), 100_000 * 10**18);
+        _mint(address(addressA), 100_000 * 10**18);
     }
 }
 
@@ -325,5 +327,78 @@ contract MarketplaceTest is Test {
             currency: address(mockCurrency)
         });
         vm.stopPrank();
+    }
+
+    function testBuyERC721() public {
+        // create a sale
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        // buy nft, emit the correct Purchase event
+        vm.startPrank(addressB);
+        mockCurrency.approve(address(marketPlace), 100);
+        vm.expectEmit(true, true, true, true);
+        emit Purchase(1, address(addressB), address(addressB));
+        marketPlace.buy({
+            saleId: 1,
+            recipient: address(addressB),
+            amountToBuy: 1,
+            amountFromBalance: 0
+        });
+
+        // send the nft cost to the platform
+        uint256 marketPlaceBalance = mockCurrency.balanceOf(
+            address(marketPlace)
+        );
+        assertEq(marketPlaceBalance, 100);
+
+        // add system fee to systemWallet balance
+        (address systemWallet, uint256 fee) = registry.feeInfo(100);
+        uint256 systemBalance = marketPlace.getClaimableBalance(
+            systemWallet,
+            address(mockCurrency)
+        );
+        assertEq(fee, systemBalance);
+
+        // add seller gains to seller balance
+        uint256 sellerBalance = marketPlace.getClaimableBalance(
+            address(addressA),
+            address(mockCurrency)
+        );
+        assertEq(sellerBalance, 100 - fee);
+
+        // update sale info
+        (
+            bool isERC721,
+            address nftAddress,
+            uint256 nftId,
+            address owner,
+            uint256 amount,
+            uint256 purchased,
+            uint256 startTime,
+            uint256 endTime,
+            uint256 price,
+            address currency
+        ) = marketPlace.sales(1);
+        assertEq(purchased, 1);
+        assertEq(marketPlace.getUserPurchased(1, address(addressB)), 1);
+
+        // send the nft to the buyer
+        assertEq(nft721.balanceOf(address(marketPlace)), 0);
+        assertEq(nft721.ownerOf(1), address(addressB));
+        assertEq(nft721.balanceOf(address(addressB)), 1);
     }
 }
