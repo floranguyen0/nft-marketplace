@@ -134,6 +134,7 @@ contract MarketplaceTest is Test {
             price: 100,
             currency: address(mockCurrency)
         });
+        vm.stopPrank();
 
         // save sale info correctly
         (
@@ -164,5 +165,56 @@ contract MarketplaceTest is Test {
         assertEq(nft721.balanceOf(address(marketPlace)), 1);
         assertEq(nft721.ownerOf(1), address(marketPlace));
         assertEq(nft721.balanceOf(address(addressA)), 0);
+    }
+
+    function testCreateSaleERC1155() public {
+        nft1155.mint(addressB, 1, 10);
+        vm.startPrank(addressB);
+        nft1155.setApprovalForAll(address(marketPlace), true);
+
+        // emit the SaleCreated event correctly
+        vm.expectEmit(true, true, true, true);
+        emit SaleCreated(1, address(nft1155), 1);
+
+        marketPlace.createSale({
+            isERC721: false,
+            nftAddress: address(nft1155),
+            nftId: 1,
+            amount: 5,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 4 days,
+            price: 200,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
+
+        // save sale info correctly
+        (
+            bool isERC721,
+            address nftAddress,
+            uint256 nftId,
+            address owner,
+            uint256 amount,
+            uint256 purchased,
+            uint256 startTime,
+            uint256 endTime,
+            uint256 price,
+            address currency
+        ) = marketPlace.sales(1);
+
+        assertEq(isERC721, false);
+        assertEq(nftAddress, address(nft1155));
+        assertEq(nftId, 1);
+        assertEq(owner, address(addressB));
+        assertEq(amount, 5);
+        assertEq(purchased, 0);
+        assertEq(startTime, block.timestamp);
+        assertEq(endTime, block.timestamp + 4 days);
+        assertEq(price, 200);
+        assertEq(currency, address(mockCurrency));
+
+        // transfer nft to the platform
+        assertEq(nft1155.balanceOf(address(marketPlace), 1), 5);
+        assertEq(nft1155.balanceOf(address(addressB), 1), 5);
     }
 }
