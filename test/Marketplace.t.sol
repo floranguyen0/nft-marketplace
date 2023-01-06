@@ -810,4 +810,9 @@ contract MarketplaceTest is Test {
         );
         assertEq(sellerBalanceAfterClaimed, 0);
     }
+
+    function testClaimedFundFailNothingToClaim() public {
+        vm.expectRevert("Nothing to claim");
+        marketPlace.claimFunds(address(mockCurrency));
+    }
 }
