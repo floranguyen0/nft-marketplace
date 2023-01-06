@@ -842,9 +842,56 @@ contract MarketplaceTest is Test {
             price: 100,
             currency: address(mockCurrency)
         });
+
+        // emit the SaleCancelled event correctly
+        vm.expectEmit(true, true, true, true);
+        emit SaleCancelled(1);
         marketPlace.cancelSale(1);
 
         assertEq(marketPlace.cancelledSale(1), true);
         assertEq(marketPlace.getSaleStatus(1), "CANCELLED");
+    }
+
+    function testCancelSaleFailOnlyOwnerOrCreator() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+
+        vm.stopPrank();
+        vm.prank(address(addressD));
+        vm.expectRevert("Only owner or sale creator");
+        marketPlace.cancelSale(1);
+    }
+
+    function testCancelSaleFailNotActiveOrPending() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+
+        marketPlace.cancelSale(1);
+        vm.expectRevert("Must be active or pending");
+        marketPlace.cancelSale(1);
     }
 }
