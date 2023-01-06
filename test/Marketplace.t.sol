@@ -763,4 +763,51 @@ contract MarketplaceTest is Test {
         vm.expectRevert("Stock already sold or claimed");
         marketPlace.claimSaleNfts(1);
     }
+
+    function testClaimFunds() public {
+        // create a sale
+        nft721.safeMint(addressC, 1);
+        vm.startPrank(addressC);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
+
+        // buy nft, emit the correct Purchase event
+        vm.startPrank(addressA);
+        mockCurrency.approve(address(marketPlace), 100);
+        marketPlace.buy({
+            saleId: 1,
+            recipient: address(addressA),
+            amountToBuy: 1,
+            amountFromBalance: 0
+        });
+        vm.stopPrank();
+
+        uint256 sellerBalanceBeforeClaimed = marketPlace.getClaimableBalance(
+            address(addressC),
+            address(mockCurrency)
+        );
+        vm.startPrank(address(addressC));
+        marketPlace.claimFunds(address(mockCurrency));
+
+        uint256 sellerBalanceAfterClaimed = marketPlace.getClaimableBalance(
+            address(addressC),
+            address(mockCurrency)
+        );
+
+        assertEq(
+            mockCurrency.balanceOf(address(addressC)),
+            sellerBalanceBeforeClaimed
+        );
+        assertEq(sellerBalanceAfterClaimed, 0);
+    }
 }
