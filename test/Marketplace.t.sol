@@ -694,4 +694,73 @@ contract MarketplaceTest is Test {
         assertEq(nft1155.balanceOf(address(marketPlace), 1), 0);
         assertEq(nft1155.balanceOf(address(addressA), 1), 10);
     }
+
+    function testClaimSaleNftsFailSaleNotClosed() public {
+        // create a sale
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+
+        // claim nft(s)
+        vm.expectRevert("Cannot claim before sale closes");
+        marketPlace.claimSaleNfts(1);
+    }
+
+    function testClaimSaleNftsFailNotNftOwner() public {
+        // create a sale
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
+
+        // claim nft(s)
+        skip(4 days);
+        vm.expectRevert("Only nft owner can claim");
+        marketPlace.claimSaleNfts(1);
+    }
+
+    function testClaimSaleNftsFailAlreadySoldOrClaimed() public {
+        // create a sale
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+
+        // claim nft(s)
+        skip(4 days);
+        marketPlace.claimSaleNfts(1);
+
+        // claim nft(s) again
+        vm.expectRevert("Stock already sold or claimed");
+        marketPlace.claimSaleNfts(1);
+    }
 }
