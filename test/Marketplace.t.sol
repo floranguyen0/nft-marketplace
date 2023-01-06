@@ -627,8 +627,10 @@ contract MarketplaceTest is Test {
             currency: address(mockCurrency)
         });
 
-        // claim nft(s)
+        // claim nft(s) and emit the ClaimSaleNFTs event correctly
         skip(4 days);
+        vm.expectEmit(true, true, true, true);
+        emit ClaimSaleNFTs(1, address(addressA), 1);
         marketPlace.claimSaleNfts(1);
 
         // update purchased info correctly
@@ -671,8 +673,10 @@ contract MarketplaceTest is Test {
         assertEq(nft1155.balanceOf(address(marketPlace), 1), 3);
         assertEq(nft1155.balanceOf(address(addressA), 1), 7);
 
-        // claim nft(s)
+        // claim nft(s) and emit the ClaimSaleNfts event correctly
         skip(4 days);
+        vm.expectEmit(true, true, true, true);
+        emit ClaimSaleNFTs(1, address(addressA), 3);
         marketPlace.claimSaleNfts(1);
 
         // update purchased info correctly
@@ -781,7 +785,7 @@ contract MarketplaceTest is Test {
         });
         vm.stopPrank();
 
-        // buy nft, emit the correct Purchase event
+        // buy nft
         vm.startPrank(addressA);
         mockCurrency.approve(address(marketPlace), 100);
         marketPlace.buy({
@@ -792,11 +796,18 @@ contract MarketplaceTest is Test {
         });
         vm.stopPrank();
 
+        // emit the ClaimFunds event correctly
         uint256 sellerBalanceBeforeClaimed = marketPlace.getClaimableBalance(
             address(addressC),
             address(mockCurrency)
         );
         vm.startPrank(address(addressC));
+        vm.expectEmit(true, true, true, true);
+        emit ClaimFunds(
+            address(addressC),
+            address(mockCurrency),
+            sellerBalanceBeforeClaimed
+        );
         marketPlace.claimFunds(address(mockCurrency));
 
         uint256 sellerBalanceAfterClaimed = marketPlace.getClaimableBalance(
