@@ -610,4 +610,88 @@ contract MarketplaceTest is Test {
             amountFromBalance: 50
         });
     }
+
+    function testClaimSaleNftsERC721() public {
+        // create a sale
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+
+        // claim nft(s)
+        skip(4 days);
+        marketPlace.claimSaleNfts(1);
+
+        // update purchased info correctly
+        (
+            bool isERC721,
+            address nftAddress,
+            uint256 nftId,
+            address owner,
+            uint256 amount,
+            uint256 purchased,
+            uint256 startTime,
+            uint256 endTime,
+            uint256 price,
+            address currency
+        ) = marketPlace.sales(1);
+        assertEq(purchased, 1);
+
+        // send nft(s) back to the seller correctly
+        assertEq(nft721.balanceOf(address(marketPlace)), 0);
+        assertEq(nft721.ownerOf(1), address(address(addressA)));
+        assertEq(nft721.balanceOf(address(addressA)), 1);
+    }
+
+    function testClaimSaleNftsERC1155() public {
+        // create a sale
+        nft1155.mint(addressA, 1, 10);
+        vm.startPrank(addressA);
+        nft1155.setApprovalForAll(address(marketPlace), true);
+        marketPlace.createSale({
+            isERC721: false,
+            nftAddress: address(nft1155),
+            nftId: 1,
+            amount: 3,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+
+        assertEq(nft1155.balanceOf(address(marketPlace), 1), 3);
+        assertEq(nft1155.balanceOf(address(addressA), 1), 7);
+
+        // claim nft(s)
+        skip(4 days);
+        marketPlace.claimSaleNfts(1);
+
+        // update purchased info correctly
+        (
+            bool isERC721,
+            address nftAddress,
+            uint256 nftId,
+            address owner,
+            uint256 amount,
+            uint256 purchased,
+            uint256 startTime,
+            uint256 endTime,
+            uint256 price,
+            address currency
+        ) = marketPlace.sales(1);
+        assertEq(purchased, 3);
+
+        // send nft(s) back to the seller correctly
+        assertEq(nft1155.balanceOf(address(marketPlace), 1), 0);
+        assertEq(nft1155.balanceOf(address(addressA), 1), 10);
+    }
 }
