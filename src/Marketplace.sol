@@ -357,13 +357,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     /// @notice Allows contract owner or seller to cancel a pending or active sale
     /// @param saleId the index of the sale to cancel
     function cancelSale(uint256 saleId) external {
-        SaleInfo memory saleInfo = sales[saleId];
-        address nftOwner = saleInfo.isERC721
-            ? INFT(saleInfo.nftAddress).ownerOf(saleInfo.nftId)
-            : saleInfo.owner;
-
         require(
-            msg.sender == nftOwner || msg.sender == owner(),
+            msg.sender == sales[saleId].owner || msg.sender == owner(),
             "Only owner or sale creator"
         );
         require(
