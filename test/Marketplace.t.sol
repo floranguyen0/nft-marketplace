@@ -329,6 +329,25 @@ contract MarketplaceTest is Test {
         vm.stopPrank();
     }
 
+    function testCreateSaleFailSellMoreThanOneERC721() public {
+        nft721.safeMint(addressA, 2);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 2);
+
+        vm.expectRevert("Can only sell one NFT for ERC721");
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 2,
+            amount: 2,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 5 days,
+            price: 300,
+            currency: address(mockCurrency)
+        });
+        vm.stopPrank();
+    }
+
     function testBuyERC721() public {
         // create a sale
         nft721.safeMint(addressA, 1);
