@@ -425,7 +425,6 @@ contract MarketplaceTest is Test {
         // vm.stopPrank();
 
         // buy nft, emit the correct Purchase event
-        // vm.startPrank(addressB);
         mockCurrency.approve(address(marketPlace), 600);
         vm.expectEmit(true, true, true, true);
         emit Purchase(1, address(addressA), address(addressB));
@@ -477,5 +476,119 @@ contract MarketplaceTest is Test {
         // send the nft to the buyer
         assertEq(nft1155.balanceOf(address(marketPlace), 1), 2);
         assertEq(nft1155.balanceOf(address(addressB), 1), 3);
+    }
+
+    function testBuyFailContractDeprecated() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        registry.setContractStatus(address(marketPlace), false);
+        vm.startPrank(address(addressA));
+        mockCurrency.approve(address(marketPlace), 100);
+        vm.expectRevert("This contract is deprecated");
+        marketPlace.buy({
+            saleId: 1,
+            recipient: address(addressB),
+            amountToBuy: 1,
+            amountFromBalance: 0
+        });
+    }
+
+    function testBuyFailSaleNotActive() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+
+        mockCurrency.approve(address(marketPlace), 200);
+        marketPlace.buy({
+            saleId: 1,
+            recipient: address(addressB),
+            amountToBuy: 1,
+            amountFromBalance: 0
+        });
+
+        vm.expectRevert("Sale is not active");
+        marketPlace.buy({
+            saleId: 1,
+            recipient: address(addressB),
+            amountToBuy: 1,
+            amountFromBalance: 0
+        });
+    }
+
+    function testBuyFailNotEnoughStock() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        mockCurrency.approve(address(marketPlace), 200);
+
+        vm.expectRevert("Not enough stock for purchase");
+        marketPlace.buy({
+            saleId: 1,
+            recipient: address(addressB),
+            amountToBuy: 2,
+            amountFromBalance: 0
+        });
+    }
+
+    function testBuyFailNotEnoughBalance() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        mockCurrency.approve(address(marketPlace), 200);
+
+        vm.expectRevert("Not enough balance");
+        marketPlace.buy({
+            saleId: 1,
+            recipient: address(addressB),
+            amountToBuy: 1,
+            amountFromBalance: 50
+        });
     }
 }
