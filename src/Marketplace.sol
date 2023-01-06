@@ -155,6 +155,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         address currency
     ) external returns (uint256) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
+        if (isERC721) {
+            require(amount == 1, "Can only sell one NFT for ERC721");
+        }
         INFT nftContract = INFT(nftAddress);
 
         // transfer nft to the platform
@@ -179,7 +182,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             nftAddress: nftAddress,
             nftId: nftId,
             owner: msg.sender,
-            amount: isERC721 ? 1 : amount,
+            amount: amount,
             purchased: 0,
             startTime: startTime,
             endTime: endTime,
