@@ -826,4 +826,25 @@ contract MarketplaceTest is Test {
         vm.expectRevert("Nothing to claim");
         marketPlace.claimFunds(address(mockCurrency));
     }
+
+    function testCancelSale() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+
+        marketPlace.createSale({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            amount: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            price: 100,
+            currency: address(mockCurrency)
+        });
+        marketPlace.cancelSale(1);
+
+        assertEq(marketPlace.cancelledSale(1), true);
+        assertEq(marketPlace.getSaleStatus(1), "CANCELLED");
+    }
 }
