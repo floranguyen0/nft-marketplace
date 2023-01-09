@@ -111,6 +111,8 @@ contract MarketplaceTest is Test {
         uint256 indexed newBalance
     );
 
+    event BidPlaced(uint256 auctionId, uint256 amount);
+
     struct Bid {
         uint256 amount;
         uint256 timestamp;
@@ -1005,6 +1007,9 @@ contract MarketplaceTest is Test {
 
         vm.startPrank(addressB);
         mockCurrency.approve(address(marketPlace), 200);
+        // emit the SaleCancelled event correctly
+        vm.expectEmit(true, true, true, true);
+        emit BidPlaced(1, 200);
         marketPlace.bid({
             auctionId: 1,
             amountFromBalance: 0,
@@ -1019,5 +1024,150 @@ contract MarketplaceTest is Test {
         );
         assertEq(bidInfo.amount, 200);
         assertEq(bidInfo.timestamp, block.timestamp);
+    }
+
+    function testBidFailContractDeprecated() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createAuction({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        vm.prank(addressB);
+        mockCurrency.approve(address(marketPlace), 200);
+        registry.setContractStatus(address(marketPlace), false);
+        vm.prank(addressB);
+        vm.expectRevert("This contract is deprecated");
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 0,
+            externalFunds: 200
+        });
+    }
+
+    function testBidFailAuctionNotActive() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createAuction({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 100,
+            currency: address(mockCurrency)
+        });
+        marketPlace.cancelAuction(1);
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        vm.startPrank(addressB);
+        mockCurrency.approve(address(marketPlace), 200);
+        vm.expectRevert("Auction is not active");
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 0,
+            externalFunds: 200
+        });
+    }
+
+    function testBidFailBidEnough() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createAuction({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 200,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        vm.startPrank(addressB);
+        mockCurrency.approve(address(marketPlace), 550);
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 0,
+            externalFunds: 300
+        });
+
+        Marketplace.Bid memory bidInfo = marketPlace.getBidDetails(
+            1,
+            address(addressB)
+        );
+        vm.expectRevert("Bid is not high enough");
+        vm.stopPrank();
+        vm.prank(addressA);
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 0,
+            externalFunds: 250
+        });
+    }
+
+    function testBidFailBidTooLow() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createAuction({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 300,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        vm.startPrank(addressB);
+        mockCurrency.approve(address(marketPlace), 200);
+        vm.expectRevert("Bid is lower than the reserve price");
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 0,
+            externalFunds: 200
+        });
+    }
+
+    function testBidFailNotEnoughBalance() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createAuction({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 300,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        vm.startPrank(addressB);
+        mockCurrency.approve(address(marketPlace), 200);
+        vm.expectRevert("Not enough balance");
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 100,
+            externalFunds: 400
+        });
     }
 }
