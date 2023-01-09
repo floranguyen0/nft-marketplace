@@ -397,6 +397,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         INFT nftContract = INFT(nftAddress);
 
+        // transfer the nft to the platform
         if (isERC721) {
             nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
         } else {
@@ -409,6 +410,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             );
         }
 
+        // save auction info
         auctionIdCounter.increment();
         uint256 auctionId = auctionIdCounter.current();
 
