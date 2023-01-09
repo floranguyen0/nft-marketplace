@@ -938,4 +938,47 @@ contract MarketplaceTest is Test {
         assertEq(reservePrice, 100);
         assertEq(currency, address(mockCurrency));
     }
+
+    function testCreateAuctionERC1155() public {
+        nft1155.mint(addressA, 1, 10);
+        vm.startPrank(addressA);
+        nft1155.setApprovalForAll(address(marketPlace), true);
+
+        marketPlace.createAuction({
+            isERC721: false,
+            nftAddress: address(nft1155),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 100,
+            currency: address(mockCurrency)
+        });
+
+        // send nft(s) to the marketplace correctly
+        assertEq(nft1155.balanceOf(address(marketPlace), 1), 1);
+        assertEq(nft1155.balanceOf(address(addressA), 1), 9);
+
+        // save auction info correctly
+        (
+            bool isERC721,
+            uint256 id,
+            address owner,
+            address nftAddress,
+            uint256 nftId,
+            uint256 startTime,
+            uint256 endTime,
+            uint256 reservePrice,
+            address currency
+        ) = marketPlace.auctions(1);
+
+        assertEq(isERC721, false);
+        assertEq(id, 1);
+        assertEq(owner, address(addressA));
+        assertEq(nftAddress, address(nft1155));
+        assertEq(nftId, 1);
+        assertEq(startTime, block.timestamp);
+        assertEq(endTime, block.timestamp + 3 days);
+        assertEq(reservePrice, 100);
+        assertEq(currency, address(mockCurrency));
+    }
 }
