@@ -111,6 +111,11 @@ contract MarketplaceTest is Test {
         uint256 indexed newBalance
     );
 
+    struct Bid {
+        uint256 amount;
+        uint256 timestamp;
+    }
+
     function setUp() public {
         // create contract instance
         registry = new Registry();
@@ -980,5 +985,39 @@ contract MarketplaceTest is Test {
         assertEq(endTime, block.timestamp + 3 days);
         assertEq(reservePrice, 100);
         assertEq(currency, address(mockCurrency));
+    }
+
+    function testBid() public {
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createAuction({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        vm.startPrank(addressB);
+        mockCurrency.approve(address(marketPlace), 200);
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 0,
+            externalFunds: 200
+        });
+
+        // save the correct bid info
+        assertEq(marketPlace.escrow(address(mockCurrency)), 200);
+        Marketplace.Bid memory bidInfo = marketPlace.getBidDetails(
+            1,
+            address(addressB)
+        );
+        assertEq(bidInfo.amount, 200);
+        assertEq(bidInfo.timestamp, block.timestamp);
     }
 }
