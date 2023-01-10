@@ -393,14 +393,14 @@ contract MarketplaceTest is Test {
 
         // add system fee to systemWallet balance
         (address systemWallet, uint256 fee) = registry.feeInfo(100);
-        uint256 systemBalance = marketPlace.getClaimableBalance(
+        uint256 systemBalance = marketPlace.claimableFunds(
             systemWallet,
             address(mockCurrency)
         );
         assertEq(fee, systemBalance);
 
         // add seller gains to seller balance
-        uint256 sellerBalance = marketPlace.getClaimableBalance(
+        uint256 sellerBalance = marketPlace.claimableFunds(
             address(addressA),
             address(mockCurrency)
         );
@@ -420,7 +420,7 @@ contract MarketplaceTest is Test {
             address currency
         ) = marketPlace.sales(1);
         assertEq(purchased, 1);
-        assertEq(marketPlace.getUserPurchased(1, address(addressB)), 1);
+        assertEq(marketPlace.purchased(1, address(addressB)), 1);
 
         // send the nft to the buyer
         assertEq(nft721.balanceOf(address(marketPlace)), 0);
@@ -470,14 +470,14 @@ contract MarketplaceTest is Test {
 
         // add system fee to systemWallet balance
         (address systemWallet, uint256 fee) = registry.feeInfo(600);
-        uint256 systemBalance = marketPlace.getClaimableBalance(
+        uint256 systemBalance = marketPlace.claimableFunds(
             systemWallet,
             address(mockCurrency)
         );
         assertEq(fee, systemBalance);
 
         // add seller gains to seller balance
-        uint256 sellerBalance = marketPlace.getClaimableBalance(
+        uint256 sellerBalance = marketPlace.claimableFunds(
             address(addressA),
             address(mockCurrency)
         );
@@ -497,7 +497,7 @@ contract MarketplaceTest is Test {
             address currency
         ) = marketPlace.sales(1);
         assertEq(purchased, 3);
-        assertEq(marketPlace.getUserPurchased(1, address(addressA)), 3);
+        assertEq(marketPlace.purchased(1, address(addressA)), 3);
 
         // send the nft to the buyer
         assertEq(nft1155.balanceOf(address(marketPlace), 1), 2);
@@ -804,7 +804,7 @@ contract MarketplaceTest is Test {
         vm.stopPrank();
 
         // emit the ClaimFunds event correctly
-        uint256 sellerBalanceBeforeClaimed = marketPlace.getClaimableBalance(
+        uint256 sellerBalanceBeforeClaimed = marketPlace.claimableFunds(
             address(addressC),
             address(mockCurrency)
         );
@@ -817,7 +817,7 @@ contract MarketplaceTest is Test {
         );
         marketPlace.claimFunds(address(mockCurrency));
 
-        uint256 sellerBalanceAfterClaimed = marketPlace.getClaimableBalance(
+        uint256 sellerBalanceAfterClaimed = marketPlace.claimableFunds(
             address(addressC),
             address(mockCurrency)
         );
@@ -1018,12 +1018,12 @@ contract MarketplaceTest is Test {
 
         // save the correct bid info
         assertEq(marketPlace.escrow(address(mockCurrency)), 200);
-        Marketplace.Bid memory bidInfo = marketPlace.getBidDetails(
+        (uint256 amount, uint256 timestamp) = marketPlace.bids(
             1,
             address(addressB)
         );
-        assertEq(bidInfo.amount, 200);
-        assertEq(bidInfo.timestamp, block.timestamp);
+        assertEq(amount, 200);
+        assertEq(timestamp, block.timestamp);
     }
 
     function testBidFailContractDeprecated() public {
@@ -1105,10 +1105,6 @@ contract MarketplaceTest is Test {
             externalFunds: 300
         });
 
-        Marketplace.Bid memory bidInfo = marketPlace.getBidDetails(
-            1,
-            address(addressB)
-        );
         vm.expectRevert("Bid is not high enough");
         vm.stopPrank();
         vm.prank(addressA);
