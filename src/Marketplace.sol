@@ -9,6 +9,8 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "./interfaces/INFT.sol";
 import "./interfaces/IRegistry.sol";
 
+/// @title Marketplace
+/// @author Linum Labs
 /// @notice Allows selling bundles of ERC1155 NFTs and ERC721 at a fix price
 /// @dev Assumes the existence of a Registry as specified in IRegistry
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
@@ -114,11 +116,11 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     mapping(uint256 => address) public highestBidder;
     mapping(address => uint256) public escrow;
     // saleId => purchaserAddress => amountPurchased
-    mapping(uint256 => mapping(address => uint256)) private _purchased;
+    mapping(uint256 => mapping(address => uint256)) public purchased;
     // auctionId => bidderAddress => Bid
-    mapping(uint256 => mapping(address => Bid)) private _bids;
+    mapping(uint256 => mapping(address => Bid)) public bids;
     // userAddress => tokenAddress => amount
-    mapping(address => mapping(address => uint256)) private _claimableFunds;
+    mapping(address => mapping(address => uint256)) public claimableFunds;
 
     /*//////////////////////////////////////////////////////////////
                           CONSTRUCTOR
@@ -219,7 +221,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
         address currency = saleInfo.currency;
         require(
-            amountFromBalance <= _claimableFunds[msg.sender][currency],
+            amountFromBalance <= claimableFunds[msg.sender][currency],
             "Not enough balance"
         );
 
@@ -247,32 +249,32 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             );
         }
         if (amountFromBalance > 0) {
-            _claimableFunds[msg.sender][currency] -= amountFromBalance;
+            claimableFunds[msg.sender][currency] -= amountFromBalance;
         }
 
         // system fee
         (address systemWallet, uint256 fee) = _registry.feeInfo(
             amountToBuy * saleInfo.price
         );
-        _claimableFunds[systemWallet][currency] += fee;
+        claimableFunds[systemWallet][currency] += fee;
 
         // artist royalty if artist isn't the seller
         if (saleInfo.owner != artistAddress) {
-            _claimableFunds[artistAddress][currency] += royalties;
+            claimableFunds[artistAddress][currency] += royalties;
         } else {
             // since the artist is the seller
             royalties = 0;
         }
 
         // seller gains
-        _claimableFunds[saleInfo.owner][currency] +=
+        claimableFunds[saleInfo.owner][currency] +=
             (amountToBuy * saleInfo.price) -
             fee -
             royalties;
 
         // update the sale info
         sales[saleId].purchased += amountToBuy;
-        _purchased[saleId][msg.sender] += amountToBuy;
+        purchased[saleId][msg.sender] += amountToBuy;
 
         // send the nft to the buyer
         if (saleInfo.isERC721) {
@@ -338,13 +340,13 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     /// @notice Withdraws in-contract balance of a particular token
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     function claimFunds(address tokenAddress) external {
-        uint256 payout = _claimableFunds[msg.sender][tokenAddress];
+        uint256 payout = claimableFunds[msg.sender][tokenAddress];
         require(payout > 0, "Nothing to claim");
         if (tokenAddress != ETH) {
-            delete _claimableFunds[msg.sender][tokenAddress];
+            delete claimableFunds[msg.sender][tokenAddress];
             IERC20(tokenAddress).safeTransfer(msg.sender, payout);
         } else {
-            delete _claimableFunds[msg.sender][tokenAddress];
+            delete claimableFunds[msg.sender][tokenAddress];
             (bool success, bytes memory reason) = msg.sender.call{
                 value: payout
             }("");
@@ -452,9 +454,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 totalAmount = amountFromBalance +
             externalFunds +
             // this allows the top bidder to top off their bid
-            _bids[auctionId][msg.sender].amount;
+            bids[auctionId][msg.sender].amount;
         require(
-            totalAmount > _bids[auctionId][highestBidder[auctionId]].amount,
+            totalAmount > bids[auctionId][highestBidder[auctionId]].amount,
             "Bid is not high enough"
         );
         require(
@@ -463,7 +465,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         );
         address currency = auctions[auctionId].currency;
         require(
-            amountFromBalance <= _claimableFunds[msg.sender][currency],
+            amountFromBalance <= claimableFunds[msg.sender][currency],
             "Not enough balance"
         );
 
@@ -477,25 +479,25 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         // next highest bid can be made claimable now,
         // also helps for figuring out how much more net is in escrow
         address lastHighestBidder = highestBidder[auctionId];
-        uint256 lastHighestAmount = _bids[auctionId][lastHighestBidder].amount;
+        uint256 lastHighestAmount = bids[auctionId][lastHighestBidder].amount;
         escrow[currency] += totalAmount - lastHighestAmount;
 
         // last bidder can claim their fund now
         if (lastHighestBidder != msg.sender) {
-            delete _bids[auctionId][lastHighestBidder].amount;
-            _claimableFunds[lastHighestBidder][currency] += lastHighestAmount;
+            delete bids[auctionId][lastHighestBidder].amount;
+            claimableFunds[lastHighestBidder][currency] += lastHighestAmount;
             emit BalanceUpdated(
                 lastHighestBidder,
                 currency,
-                _claimableFunds[lastHighestBidder][currency]
+                claimableFunds[lastHighestBidder][currency]
             );
         }
         if (amountFromBalance > 0) {
-            _claimableFunds[msg.sender][currency] -= amountFromBalance;
+            claimableFunds[msg.sender][currency] -= amountFromBalance;
             emit BalanceUpdated(msg.sender, currency, amountFromBalance);
         }
-        _bids[auctionId][msg.sender].amount = totalAmount;
-        _bids[auctionId][msg.sender].timestamp = block.timestamp;
+        bids[auctionId][msg.sender].amount = totalAmount;
+        bids[auctionId][msg.sender].timestamp = block.timestamp;
         highestBidder[auctionId] = msg.sender;
 
         emit BidPlaced(auctionId, totalAmount);
@@ -529,7 +531,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             "Nft is not available for claiming"
         );
         INFT nftContract = INFT(auctionInfo.nftAddress);
-        uint256 highestBid = _bids[auctionId][winnerAddress].amount;
+        uint256 highestBid = bids[auctionId][winnerAddress].amount;
         uint256 totalFundsToPay = msg.sender == auctionInfo.owner
             ? 0
             : highestBid;
@@ -588,7 +590,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             "Can only resolve after the auction ends"
         );
         address highestBidder_ = highestBidder[auctionId];
-        uint256 winningBid = _bids[auctionId][highestBidder_].amount;
+        uint256 winningBid = bids[auctionId][highestBidder_].amount;
         require(winningBid > 0, "No bids: cannot resolve");
 
         AuctionInfo memory auctionInfo = auctions[auctionId];
@@ -617,7 +619,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             auctionInfo.id,
             msg.sender,
             highestBidder_,
-            _bids[auctionId][highestBidder_].amount
+            bids[auctionId][highestBidder_].amount
         );
     }
 
@@ -636,15 +638,15 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
         address currency = auctions[auctionId].currency;
         address highestBidder_ = highestBidder[auctionId];
-        uint256 highestBid = _bids[auctionId][highestBidder_].amount;
+        uint256 highestBid = bids[auctionId][highestBidder_].amount;
 
         // current highest bid moves from escrow to being reclaimable
         escrow[currency] -= highestBid;
-        _claimableFunds[highestBidder_][currency] += highestBid;
+        claimableFunds[highestBidder_][currency] += highestBid;
         emit BalanceUpdated(
             highestBidder_,
             currency,
-            _claimableFunds[highestBidder_][currency]
+            claimableFunds[highestBidder_][currency]
         );
         emit AuctionCancelled(auctionId);
     }
@@ -652,16 +654,6 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     /*//////////////////////////////////////////////////////////////
                           VIEW/PURE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-
-    /// @dev the amount of an outbid bid is reduced to zero
-    /// @return a Bid struct with details of a specific bid
-    function getBidDetails(uint256 auctionId, address bidder)
-        external
-        view
-        returns (Bid memory)
-    {
-        return _bids[auctionId][bidder];
-    }
 
     function getAuctionStatus(uint256 auctionId) public view returns (bytes32) {
         require(
@@ -700,24 +692,6 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             sales[saleId].purchased == sales[saleId].amount
         ) return "ENDED";
         else revert("Unexpected error");
-    }
-
-    function getUserPurchased(uint256 saleId, address user)
-        external
-        view
-        returns (uint256)
-    {
-        return _purchased[saleId][user];
-    }
-
-    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
-    /// @return the uint256 in-contract balance of a specific address for a specific token
-    function getClaimableBalance(address account, address token)
-        external
-        view
-        returns (uint256)
-    {
-        return _claimableFunds[account][token];
     }
 
     /// @notice allows contract to receive ERC1155 NFTs
@@ -774,32 +748,32 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         // system fee
         (address systemWallet, uint256 fee) = _registry.feeInfo(fundsToPay);
         fundsToPay -= fee;
-        _claimableFunds[systemWallet][currency] += fee;
+        claimableFunds[systemWallet][currency] += fee;
         emit BalanceUpdated(
             systemWallet,
             currency,
-            _claimableFunds[systemWallet][currency]
+            claimableFunds[systemWallet][currency]
         );
 
         // artist royalty if artist isn't the seller
         if (auctionInfo.owner != artistAddress) {
             fundsToPay -= royalties;
-            _claimableFunds[artistAddress][currency] += royalties;
+            claimableFunds[artistAddress][currency] += royalties;
             emit BalanceUpdated(
                 artistAddress,
                 currency,
-                _claimableFunds[artistAddress][currency]
+                claimableFunds[artistAddress][currency]
             );
         }
 
         // seller gains
-        _claimableFunds[auctions[auctionId].owner][
+        claimableFunds[auctions[auctionId].owner][
             auctions[auctionId].currency
         ] += fundsToPay;
         emit BalanceUpdated(
             auctions[auctionId].owner,
             auctions[auctionId].currency,
-            _claimableFunds[auctions[auctionId].owner][
+            claimableFunds[auctions[auctionId].owner][
                 auctions[auctionId].currency
             ]
         );
