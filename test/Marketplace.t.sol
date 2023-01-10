@@ -1166,4 +1166,86 @@ contract MarketplaceTest is Test {
             externalFunds: 400
         });
     }
+
+    function testResolveAuction() public {
+        // create an auction
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createAuction({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        // create a bid
+        vm.startPrank(addressB);
+        mockCurrency.approve(address(marketPlace), 200);
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 0,
+            externalFunds: 200
+        });
+        assertEq(marketPlace.escrow(address(mockCurrency)), 200);
+
+        // do accounting correctly when the winner or auctioner claims
+        skip(5 days);
+        marketPlace.resolveAuction(1);
+        // escrow releases funds
+        assertEq(marketPlace.escrow(address(mockCurrency)), 0);
+        // add fee to the system balance
+        (address systemWallet, uint256 fee) = registry.feeInfo(200);
+        assertEq(
+            marketPlace.claimableFunds(systemWallet, address(mockCurrency)),
+            fee
+        );
+        // add seller gains to the seller balance
+        assertEq(
+            marketPlace.claimableFunds(addressA, address(mockCurrency)),
+            200 - fee
+        );
+
+        // transfer nft from the platform to the recipient correctly
+        assertEq(nft721.balanceOf(address(marketPlace)), 0);
+        assertEq(nft721.ownerOf(1), address(addressB));
+        assertEq(nft721.balanceOf(address(addressB)), 1);
+    }
+
+    function testResolveAuctionFailAuctionIsnotCancelledOrEnded() public {
+        // create an auction
+        nft721.safeMint(addressA, 1);
+        vm.startPrank(addressA);
+        nft721.approve(address(marketPlace), 1);
+        marketPlace.createAuction({
+            isERC721: true,
+            nftAddress: address(nft721),
+            nftId: 1,
+            startTime: block.timestamp,
+            endTime: block.timestamp + 3 days,
+            reservePrice: 100,
+            currency: address(mockCurrency)
+        });
+        mockCurrency.transfer(addressB, 10_000);
+        vm.stopPrank();
+
+        // create a bid
+        vm.startPrank(addressB);
+        mockCurrency.approve(address(marketPlace), 200);
+        marketPlace.bid({
+            auctionId: 1,
+            amountFromBalance: 0,
+            externalFunds: 200
+        });
+
+        vm.expectRevert(
+            "Can only resolve after the auction ends or is cancelled"
+        );
+        marketPlace.resolveAuction(1);
+    }
 }
