@@ -58,7 +58,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     event BidPlaced(uint256 auctionId, uint256 amount);
     event ClaimAuctionNFT(
         uint256 indexed auctionId,
-        address indexed winner,
+        address indexed claimer,
         address indexed recipient,
         uint256 amount
     );
@@ -502,110 +502,44 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         return true;
     }
 
-    /// @notice Allows the winner of the auction to claim their NFT
+    /// @notice Send NFT to auction winner and funds to auctioner's balance
     /// @notice Alternatively, allows auctioner to reclaim on an unsuccessful auction
     /// @dev this function delivers the NFT and moves the bid to the auctioner's claimable balance
     ///   and also accounts for the system fee and royalties (if applicable)
-    /// @param auctionId the index of the auction to bid on
-    /// @param recipient the address the NFT should be sent to
-    /// @return a bool indicating success
-    function claimAuctionNft(uint256 auctionId, address recipient)
-        external
-        returns (bool)
-    {
-        require(
-            recipient != address(0),
-            "Recipient cannot be the zero address"
-        );
-        address winnerAddress = highestBidder[auctionId];
-        AuctionInfo memory auctionInfo = auctions[auctionId];
-        require(
-            msg.sender == winnerAddress || msg.sender == auctionInfo.owner,
-            "Only the winner or the auctioner can claim"
-        );
+    function resolveAuction(uint256 auctionId) external {
         bytes32 status = getAuctionStatus(auctionId);
         require(
             status == "CANCELLED" || status == "ENDED",
-            "Nft is not available for claiming"
+            "Can only resolve after the auction ends or is cancelled"
         );
-        INFT nftContract = INFT(auctionInfo.nftAddress);
-        uint256 highestBid = bids[auctionId][winnerAddress].amount;
-        uint256 totalFundsToPay = msg.sender == auctionInfo.owner
-            ? 0
-            : highestBid;
-        if (msg.sender == winnerAddress) {
-            require(
-                block.timestamp > auctionInfo.endTime,
-                "Cannot claim from the auction"
-            );
-        } else {
-            require(
-                cancelledAuction[auctionId] ||
-                    (highestBid < auctionInfo.reservePrice &&
-                        block.timestamp > auctionInfo.endTime),
-                "Owner cannot reclaim nft"
-            );
-        }
-
-        // accounting logic
-        if (totalFundsToPay > 0) {
-            _nftPayment(auctionId, totalFundsToPay, nftContract);
-        }
-
-        if (auctions[auctionId].isERC721) {
-            nftContract.safeTransferFrom(
-                address(this),
-                recipient,
-                auctionInfo.nftId,
-                ""
-            );
-        } else {
-            nftContract.safeTransferFrom(
-                address(this),
-                recipient,
-                auctionInfo.nftId,
-                1,
-                ""
-            );
-        }
-
-        claimed[auctionId] = true;
-
-        emit ClaimAuctionNFT(
-            auctionInfo.nftId,
-            msg.sender,
-            recipient,
-            highestBid
-        );
-        return true;
-    }
-
-    /// @notice Allows contract owner to send NFT to auction winner and funds to auctioner's balance
-    /// @dev prevents assets from being stuck if winner does not claim
-    function resolveAuction(uint256 auctionId) external onlyOwner {
-        require(
-            getAuctionStatus(auctionId) == "ENDED",
-            "Can only resolve after the auction ends"
-        );
+        
+        AuctionInfo memory auctionInfo = auctions[auctionId];
         address highestBidder_ = highestBidder[auctionId];
         uint256 winningBid = bids[auctionId][highestBidder_].amount;
-        require(winningBid > 0, "No bids: cannot resolve");
-
-        AuctionInfo memory auctionInfo = auctions[auctionId];
+        uint256 totalFundsToPay = msg.sender == auctionInfo.owner
+            ? 0
+            : winningBid;
         INFT nftContract = INFT(auctionInfo.nftAddress);
 
-        _nftPayment(auctionId, winningBid, nftContract);
+        // accounting logic
+        address recipient;
+        if (totalFundsToPay > 0) {
+            _nftPayment(auctionId, winningBid, nftContract);
+            recipient = highestBidder_;
+        } else {
+            recipient = auctionInfo.owner;
+        }
         if (auctionInfo.isERC721) {
             nftContract.safeTransferFrom(
                 address(this),
-                highestBidder_,
+                recipient,
                 auctionInfo.nftId,
                 ""
             );
         } else {
             nftContract.safeTransferFrom(
                 address(this),
-                highestBidder_,
+                recipient,
                 auctionInfo.nftId,
                 1,
                 ""
@@ -616,7 +550,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         emit ClaimAuctionNFT(
             auctionInfo.id,
             msg.sender,
-            highestBidder_,
+            recipient,
             bids[auctionId][highestBidder_].amount
         );
     }
