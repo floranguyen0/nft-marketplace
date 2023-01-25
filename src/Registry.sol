@@ -9,12 +9,12 @@ import "./interfaces/IRegistry.sol";
 contract Registry is Ownable {
     bool allowAllCurrencies;
     address systemWallet;
-    // 3% tax on a 18 decimal asset
-    uint256 fee = 300;
-    uint256 scale = 1e4;
+    uint256 fee;
+    uint256 scale;
 
     event SystemWalletUpdated(address indexed newWallet);
-    event FeeVariablesChanged(uint256 indexed newFee, uint256 indexed newScale);
+    event FeeChanged(uint256 newFee);
+    event ScaleChanged(uint256 newScale);
     event ContractStatusChanged(address indexed changed, bool indexed status);
     event CurrencyStatusChanged(address indexed changed, bool indexed status);
 
@@ -25,6 +25,9 @@ contract Registry is Ownable {
         approvedCurrencies[
             address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa)
         ] = true;
+        // default 3% tax on a 18 decimal asset
+        fee = 300;
+        scale = 1e4;
     }
 
     function setSystemWallet(address newWallet) external onlyOwner {
@@ -33,14 +36,16 @@ contract Registry is Ownable {
         emit SystemWalletUpdated(newWallet);
     }
 
-    function setFeeVariables(uint256 newFee, uint256 newScale)
-        external
-        onlyOwner
-    {
+    function setFee(uint256 newFee) external onlyOwner {
         fee = newFee;
+
+        emit FeeChanged(newFee);
+    }
+
+    function setScale(uint256 newScale) external onlyOwner {
         scale = newScale;
 
-        emit FeeVariablesChanged(newFee, newScale);
+        emit ScaleChanged(newScale);
     }
 
     function setContractStatus(address nftContract, bool status)
