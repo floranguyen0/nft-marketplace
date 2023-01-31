@@ -23,7 +23,7 @@ contract Auction is Ownable {
 
     event NewAuction(uint256 indexed auctionId, AuctionInfo newAuction);
     event AuctionCancelled(uint256 indexed auctionId);
-    event BidPlaced(uint256 auctionId, uint256 amount);
+    event BidPlaced(uint256 indexed auctionId, uint256 amount);
     event ClaimAuctionNFT(
         uint256 indexed auctionId,
         address indexed claimer,
