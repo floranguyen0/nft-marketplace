@@ -14,7 +14,6 @@ import "./interfaces/IRegistry.sol";
 /// @dev Assumes an ERC2981-compliant NFT, as specified below
 contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     using SafeERC20 for IERC20;
-    using Counters for Counters.Counter;
 
     /*//////////////////////////////////////////////////////////////
                           STATE VARIABLES
@@ -23,8 +22,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     // address alias for using ETH as a currency
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
 
-    Counters.Counter public saleIdCounter; // saleIdCounter starts from 1
-    Counters.Counter public auctionIdCounter; // _autionId starts from 1
+    uint256 public saleIdCounter; // saleIdCounter starts from 1
+    uint256 public auctionIdCounter; // _autionId starts from 1
     IRegistry private _registry;
 
     /*//////////////////////////////////////////////////////////////
@@ -55,7 +54,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
     event NewAuction(uint256 indexed auctionId, AuctionInfo newAuction);
     event AuctionCancelled(uint256 indexed auctionId);
-    event BidPlaced(uint256 auctionId, uint256 amount);
+    event BidPlaced(uint256 indexed auctionId, uint256 amount);
     event ClaimAuctionNFT(
         uint256 indexed auctionId,
         address indexed claimer,
@@ -172,8 +171,10 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         }
 
         // save the sale info
-        saleIdCounter.increment();
-        uint256 saleId = saleIdCounter.current();
+        unchecked {
+            ++saleIdCounter;
+        }
+        uint256 saleId = saleIdCounter;
 
         sales[saleId] = SaleInfo({
             isERC721: isERC721,
@@ -411,8 +412,10 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         }
 
         // save auction info
-        auctionIdCounter.increment();
-        uint256 auctionId = auctionIdCounter.current();
+        unchecked {
+            ++auctionIdCounter;
+        }
+        uint256 auctionId = auctionIdCounter;
 
         auctions[auctionId] = AuctionInfo({
             isERC721: isERC721,
@@ -512,7 +515,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             status == "CANCELLED" || status == "ENDED",
             "Can only resolve after the auction ends or is cancelled"
         );
-        
+
         AuctionInfo memory auctionInfo = auctions[auctionId];
         address highestBidder_ = highestBidder[auctionId];
         uint256 winningBid = bids[auctionId][highestBidder_].amount;
@@ -589,7 +592,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
     function getAuctionStatus(uint256 auctionId) public view returns (bytes32) {
         require(
-            auctionId <= auctionIdCounter.current() && auctionId > 0,
+            auctionId <= auctionIdCounter && auctionId > 0,
             "Auction does not exist"
         );
         if (
@@ -607,10 +610,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     }
 
     function getSaleStatus(uint256 saleId) public view returns (bytes32) {
-        require(
-            saleId <= saleIdCounter.current() && saleId > 0,
-            "Sale does not exist"
-        );
+        require(saleId <= saleIdCounter && saleId > 0, "Sale does not exist");
         if (
             cancelledSale[saleId] || !_registry.platformContracts(address(this))
         ) return "CANCELLED";
