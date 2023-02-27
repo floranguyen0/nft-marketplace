@@ -16,10 +16,10 @@ contract Auction is Ownable {
 
     // address alias for using ETH as a currency
     address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
-
-    uint256 public auctionIdCounter; // _autionId starts from 1
     IRegistry immutable registry;
     ITreasury immutable treasury;
+
+    uint128 public auctionIdCounter; // _autionId starts from 1
 
     event NewAuction(uint256 indexed auctionId, AuctionInfo newAuction);
     event AuctionCancelled(uint256 indexed auctionId);
@@ -33,14 +33,14 @@ contract Auction is Ownable {
 
     struct AuctionInfo {
         bool isERC721;
-        uint256 id; // id of auction
+        uint128 id; // id of auction
         address owner; // address of NFT owner
         address nftAddress;
+        address currency; // use zero address or 0xeee for ETH
         uint256 nftId;
         uint256 startTime;
         uint256 endTime;
         uint256 reservePrice; // may need to be made private
-        address currency; // use zero address or 0xeee for ETH
     }
 
     struct Bid {
@@ -97,20 +97,20 @@ contract Auction is Ownable {
 
         // save auction info
         unchecked {
-            auctionIdCounter += 1;
+            ++auctionIdCounter;
         }
-        uint256 auctionId = auctionIdCounter;
+        uint128 auctionId = auctionIdCounter;
 
         auctionInfo[auctionId] = AuctionInfo({
             isERC721: isERC721,
             id: auctionId,
             owner: msg.sender,
             nftAddress: nftAddress,
+            currency: currency,
             nftId: nftId,
             startTime: startTime,
             endTime: endTime,
-            reservePrice: reservePrice,
-            currency: currency
+            reservePrice: reservePrice
         });
 
         emit NewAuction(auctionId, auctionInfo[auctionId]);
@@ -126,7 +126,7 @@ contract Auction is Ownable {
         uint256 externalFunds
     ) external payable {
         require(
-            registry.platformContracts(address(this)) == true,
+            registry.platformContracts(address(this)),
             "This contract is deprecated"
         );
         require(
@@ -285,18 +285,24 @@ contract Auction is Ownable {
             auctionId <= auctionIdCounter && auctionId > 0,
             "Auction does not exist"
         );
+
         if (
             cancelledAuction[auctionId] ||
             !registry.platformContracts(address(this))
         ) return "CANCELLED";
+
         if (claimed[auctionId]) return "ENDED & CLAIMED";
-        if (block.timestamp < auctionInfo[auctionId].startTime)
-            return "PENDING";
-        if (
-            block.timestamp >= auctionInfo[auctionId].startTime &&
-            block.timestamp < auctionInfo[auctionId].endTime
-        ) return "ACTIVE";
-        if (block.timestamp > auctionInfo[auctionId].endTime) return "ENDED";
+
+        uint256 startTime = auctionInfo[auctionId].startTime;
+        uint256 endTime = auctionInfo[auctionId].endTime;
+
+        if (block.timestamp < startTime) return "PENDING";
+
+        if (block.timestamp >= startTime && block.timestamp < endTime)
+            return "ACTIVE";
+
+        if (block.timestamp > endTime) return "ENDED";
+
         revert("error");
     }
 

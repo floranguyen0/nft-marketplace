@@ -105,7 +105,7 @@ contract Sale is Ownable {
 
         // save sale info
         unchecked {
-            saleIdCounter += 1;
+            ++saleIdCounter;
         }
         uint256 saleId = saleIdCounter;
 
@@ -288,18 +288,25 @@ contract Sale is Ownable {
 
     function getSaleStatus(uint256 saleId) public view returns (bytes32) {
         require(saleId <= saleIdCounter && saleId > 0, "Sale does not exist");
+
         if (cancelledSale[saleId] || !registry.platformContracts(address(this)))
             return "CANCELLED";
-        else if (block.timestamp < saleInfo[saleId].startTime) return "PENDING";
-        else if (
-            block.timestamp < saleInfo[saleId].endTime &&
-            saleInfo[saleId].purchased < saleInfo[saleId].amount
+
+        SaleInfo memory saleInfo_ = saleInfo[saleId];
+
+        if (block.timestamp < saleInfo_.startTime) return "PENDING";
+
+        if (
+            block.timestamp < saleInfo_.endTime &&
+            saleInfo_.purchased < saleInfo_.amount
         ) return "ACTIVE";
-        else if (
-            block.timestamp >= saleInfo[saleId].endTime ||
-            saleInfo[saleId].purchased == saleInfo[saleId].amount
+
+        if (
+            block.timestamp >= saleInfo_.endTime ||
+            saleInfo_.purchased == saleInfo_.amount
         ) return "ENDED";
-        else revert("Unexpected error");
+
+        revert("Unexpected error");
     }
 
     function _validateSale(
