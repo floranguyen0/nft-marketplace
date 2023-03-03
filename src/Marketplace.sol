@@ -86,11 +86,11 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     }
 
     struct AuctionInfo {
-        uint128 id; // id of auction
+        uint128 id; // auctionId
         uint128 nftId;
         bool isERC721;
         address nftAddress;
-        address owner; // address of NFT owner
+        address owner; // NFT owner address
         address currency; // use zero address or 0xeee for ETH
         uint256 startTime;
         uint256 endTime;
@@ -106,13 +106,14 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
                                MAPPINGS
     //////////////////////////////////////////////////////////////*/
 
-    mapping(uint256 => SaleInfo) public sales;
-    mapping(uint256 => AuctionInfo) public auctions;
-    mapping(uint256 => bool) public cancelledSale;
-    mapping(uint256 => bool) public cancelledAuction;
-    mapping(uint256 => bool) public claimed;
-    mapping(uint256 => address) public highestBidder;
-    mapping(address => uint256) public escrow;
+    mapping(uint256 => SaleInfo) public sales; // saleId => saleInfo
+    mapping(uint256 => AuctionInfo) public auctions; // auctionId => AuctionInfo
+    mapping(uint256 => bool) public cancelledSale; // saleId => status
+    mapping(uint256 => bool) public cancelledAuction; // auctionId => status
+    mapping(uint256 => bool) public claimed; // auctionId => status
+    mapping(uint256 => address) public highestBidder; // auctionId => highest bidder address
+    mapping(address => uint256) public escrow; // currency address => escrow amount
+
     // saleId => purchaserAddress => amountPurchased
     mapping(uint256 => mapping(address => uint256)) public purchased;
     // auctionId => bidderAddress => Bid
