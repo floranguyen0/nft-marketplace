@@ -9,14 +9,16 @@ import "./interfaces/IRegistry.sol";
 contract Registry is Ownable {
     bool allowAllCurrencies;
     address systemWallet;
-    uint256 fee;
-    uint256 scale;
+    uint64 fee;
+    uint64 scale;
 
     event SystemWalletUpdated(address indexed newWallet);
     event FeeChanged(uint256 newFee);
     event ScaleChanged(uint256 newScale);
     event ContractStatusChanged(address indexed changed, bool indexed status);
     event CurrencyStatusChanged(address indexed changed, bool indexed status);
+
+    error AllCurrencyApproved();
 
     mapping(address => bool) public platformContracts;
     mapping(address => bool) public approvedCurrencies;
@@ -36,15 +38,13 @@ contract Registry is Ownable {
         emit SystemWalletUpdated(newWallet);
     }
 
-    function setFee(uint256 newFee) external onlyOwner {
+    function setFee(uint64 newFee) external onlyOwner {
         fee = newFee;
-
         emit FeeChanged(newFee);
     }
 
-    function setScale(uint256 newScale) external onlyOwner {
+    function setScale(uint64 newScale) external onlyOwner {
         scale = newScale;
-
         emit ScaleChanged(newScale);
     }
 
@@ -62,7 +62,7 @@ contract Registry is Ownable {
         external
         onlyOwner
     {
-        require(!allowAllCurrencies, "All currencies are approved");
+        if (allowAllCurrencies) revert AllCurrencyApproved();
 
         if (approvedCurrencies[tokenContract] != status) {
             approvedCurrencies[tokenContract] = status;
