@@ -18,10 +18,11 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
     using SafeERC20 for IERC20;
 
     // address alias for using ETH as a currency
-    address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
-    IRegistry immutable registry;
-    ISale immutable sale;
-    IAuction immutable auction;
+    address private constant ETH =
+        address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
+    IRegistry private immutable _registry;
+    ISale private immutable _sale;
+    IAuction private immutable _auction;
     address[] approvedContracts;
 
     event ClaimFunds(
@@ -38,11 +39,17 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
 
     event EscrowUpdate(address currency, uint256 newEscrowAmount);
 
+    error OnlyAuctionCanCall();
+    error OnlySaleOrAuctionCanCall();
+
     modifier onlyAuction() {
-        require(
-            msg.sender == address(auction),
-            "Only the Auction contract can call this function"
-        );
+        if (msg.sender != address(_auction)) revert OnlyAuctionCanCall();
+        _;
+    }
+
+    modifier onlySaleOrAuction() {
+        if (msg.sender != address(_sale) && msg.sender != address(_auction))
+            revert OnlySaleOrAuctionCanCall();
         _;
     }
 
@@ -55,9 +62,9 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
         address saleAddress,
         address auctionAddress
     ) {
-        registry = IRegistry(registryAddress);
-        sale = ISale(saleAddress);
-        auction = IAuction(auctionAddress);
+        _registry = IRegistry(registryAddress);
+        _sale = ISale(saleAddress);
+        _auction = IAuction(auctionAddress);
     }
 
     /// @notice Grant the permission to update the in-contract funds
@@ -65,11 +72,7 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
         address account,
         address currency,
         uint256 newClaimableFunds
-    ) external {
-        require(
-            msg.sender == address(sale) || msg.sender == address(auction),
-            "Only Sale or Auction contract can call this function"
-        );
+    ) external onlySaleOrAuction {
         claimableFunds[account][currency] = newClaimableFunds;
 
         emit BalanceUpdated(account, currency, newClaimableFunds);
@@ -79,16 +82,25 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     function claimFunds(address tokenAddress) external {
         uint256 payout = claimableFunds[msg.sender][tokenAddress];
-        require(payout > 0, "Nothing to claim");
+        if (payout == 0) revert NothingToClaim();
         if (tokenAddress != ETH) {
             delete claimableFunds[msg.sender][tokenAddress];
             IERC20(tokenAddress).safeTransfer(msg.sender, payout);
         } else {
             delete claimableFunds[msg.sender][tokenAddress];
+
             (bool success, bytes memory reason) = msg.sender.call{
                 value: payout
             }("");
-            require(success, string(reason));
+            // bubble up the error meassage if the transfer fails
+            if (!success) {
+                assembly {
+                    let ptr := mload(0x40)
+                    let size := returndatasize()
+                    returndatacopy(ptr, 0, size)
+                    revert(ptr, size)
+                }
+            }
         }
 
         emit ClaimFunds(msg.sender, tokenAddress, payout);
@@ -100,19 +112,23 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
         uint256 fundsToPay,
         address nftAddress
     ) external onlyAuction {
-        IAuction.AuctionInfo memory auctionInfo = auction.auctionInfo(
+        IAuction.AuctionInfo memory auctionInfo = _auction.auctionInfo(
             auctionId
         );
         address currency = auctionInfo.currency;
 
-        auctionEscrow[currency] -= fundsToPay;
-        // if this is from a successful auction
+        unchecked {
+            auctionEscrow[currency] -= fundsToPay;
+        }
+        // if this is from a successful _auction
         (address artistAddress, uint256 royalties) = INFT(nftAddress)
             .royaltyInfo(auctionInfo.nftId, fundsToPay);
 
         // system fee
-        (address systemWallet, uint256 fee) = registry.feeInfo(fundsToPay);
-        fundsToPay -= fee;
+        (address systemWallet, uint256 fee) = _registry.feeInfo(fundsToPay);
+        unchecked {
+            fundsToPay -= fee;
+        }
         claimableFunds[systemWallet][currency] += fee;
 
         emit BalanceUpdated(
@@ -123,7 +139,9 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
 
         // artist royalty if artist isn't the seller
         if (auctionInfo.owner != artistAddress) {
-            fundsToPay -= royalties;
+            unchecked {
+                fundsToPay -= royalties;
+            }
             claimableFunds[artistAddress][currency] += royalties;
             emit BalanceUpdated(
                 artistAddress,
