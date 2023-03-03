@@ -186,17 +186,15 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         INFT nftContract = INFT(nftAddress);
 
         // transfer nft to the platform
-        if (isERC721) {
-            nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
-        } else {
-            nftContract.safeTransferFrom(
+        isERC721
+            ? nftContract.safeTransferFrom(msg.sender, address(this), nftId, "")
+            : nftContract.safeTransferFrom(
                 msg.sender,
                 address(this),
                 nftId,
                 amount,
                 ""
             );
-        }
 
         // save the sale info
         unchecked {
@@ -247,11 +245,10 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         if (amountFromBalance > claimableFunds[msg.sender][currency])
             revert NotEnoughBalance();
 
-        uint256 nftId = saleInfo.nftId;
         INFT nftContract = INFT(saleInfo.nftAddress);
 
         (address artistAddress, uint256 royalties) = nftContract.royaltyInfo(
-            nftId,
+            saleInfo.nftId,
             amountToBuy * saleInfo.price
         );
 
@@ -268,8 +265,10 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             if (msg.value != (amountToBuy * saleInfo.price) - amountFromBalance)
                 revert InputValueAndPriceMismatch();
         }
-        if (amountFromBalance > 0) {
-            claimableFunds[msg.sender][currency] -= amountFromBalance;
+        if (amountFromBalance != 0) {
+            unchecked {
+                claimableFunds[msg.sender][currency] -= amountFromBalance;
+            }
         }
 
         // system fee
@@ -297,22 +296,20 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         purchased[saleId][msg.sender] += amountToBuy;
 
         // send the nft to the buyer
-        if (saleInfo.isERC721) {
-            nftContract.safeTransferFrom(
+        saleInfo.isERC721
+            ? nftContract.safeTransferFrom(
                 address(this),
                 recipient,
                 saleInfo.nftId,
                 ""
-            );
-        } else {
-            nftContract.safeTransferFrom(
+            )
+            : nftContract.safeTransferFrom(
                 address(this),
                 recipient,
                 saleInfo.nftId,
                 amountToBuy,
                 ""
             );
-        }
 
         emit Purchase(saleId, msg.sender, recipient);
         return true;
@@ -420,17 +417,15 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         INFT nftContract = INFT(nftAddress);
 
         // transfer the nft to the platform
-        if (isERC721) {
-            nftContract.safeTransferFrom(msg.sender, address(this), nftId, "");
-        } else {
-            nftContract.safeTransferFrom(
+        isERC721
+            ? nftContract.safeTransferFrom(msg.sender, address(this), nftId, "")
+            : nftContract.safeTransferFrom(
                 msg.sender,
                 address(this),
                 nftId,
                 1,
                 ""
             );
-        }
 
         // save auction info
         unchecked {
