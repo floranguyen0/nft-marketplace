@@ -41,6 +41,7 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
 
     error OnlyAuctionCanCall();
     error OnlySaleOrAuctionCanCall();
+    error NothingToClaim();
 
     modifier onlyAuction() {
         if (msg.sender != address(_auction)) revert OnlyAuctionCanCall();
@@ -89,9 +90,7 @@ contract Treasury is Ownable, ERC721Holder, ERC1155Holder {
         } else {
             delete claimableFunds[msg.sender][tokenAddress];
 
-            (bool success, bytes memory reason) = msg.sender.call{
-                value: payout
-            }("");
+            (bool success, ) = msg.sender.call{value: payout}("");
             // bubble up the error meassage if the transfer fails
             if (!success) {
                 assembly {
