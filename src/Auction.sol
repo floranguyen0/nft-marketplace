@@ -15,9 +15,10 @@ contract Auction is Ownable {
     using SafeERC20 for IERC20;
 
     // address alias for using ETH as a currency
-    address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
-    IRegistry immutable registry;
-    ITreasury immutable treasury;
+    address private constant ETH =
+        address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
+    IRegistry private immutable _registry;
+    ITreasury private immutable _treasury;
 
     uint128 public auctionIdCounter; // _autionId starts from 1
 
@@ -30,14 +31,33 @@ contract Auction is Ownable {
         address indexed recipient,
         uint256 amount
     );
+    event BalanceUpdated(
+        address indexed accountOf,
+        address indexed tokenAddress,
+        uint256 indexed newBalance
+    );
+
+    error ContractIsDeprecated();
+    error NotEnoughBalance();
+    error AuctionIsNotActive();
+    error BidIsNotHighEnough();
+    error ArgumentsAndValueMismatch();
+    error AuctionIsNotEndOrCancelled();
+    error OnlyOwnerOrAuctionCreator();
+    error AuctionMustBeActiveOrPending();
+    error AuctionDoesNotExist();
+    error NFTContractIsNotApproved();
+    error CurrencyIsNotSupported();
+    error ContractMustSupportERC2981();
+    error EndTimeMustBeGreaterThanStartTime();
 
     struct AuctionInfo {
+        uint128 id; // auctionId
+        uint128 nftId;
         bool isERC721;
-        uint128 id; // id of auction
-        address owner; // address of NFT owner
         address nftAddress;
+        address owner; // NFT owner address
         address currency; // use zero address or 0xeee for ETH
-        uint256 nftId;
         uint256 startTime;
         uint256 endTime;
         uint256 reservePrice; // may need to be made private
@@ -48,27 +68,32 @@ contract Auction is Ownable {
         uint256 timestamp;
     }
 
-    mapping(uint256 => AuctionInfo) public auctionInfo;
-    mapping(uint256 => bool) public cancelledAuction;
-    mapping(uint256 => bool) public claimed;
-    mapping(uint256 => address) public highestBidder;
+    mapping(uint256 => AuctionInfo) public auctionInfo; // auctionId => AuctionInfo
+    mapping(uint256 => bool) public cancelledAuction; // auctionId => isCancelled
+    mapping(uint256 => bool) public claimed; // auctionId => isClaimed
+    mapping(uint256 => address) public highestBidder; // auctionId => highest bidder address
     // auctionId => bidderAddress => Bid
     mapping(uint256 => mapping(address => Bid)) public bids;
 
     constructor(address registryAddress, address treasuryAddress) {
-        registry = IRegistry(registryAddress);
-        treasury = ITreasury(treasuryAddress);
+        _registry = IRegistry(registryAddress);
+        _treasury = ITreasury(treasuryAddress);
     }
 
-    /// @notice Creates a first-price auction for ERC721 & ERC1155 NFT
+    /// @notice Creates a first-price auction for a ERC1155 NFT
+    /// @dev NFT contract must be ERC2981-compliant and recognized by Registry
+    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
+    /// @param nftAddress the address of the NFT contract
+    /// @param nftId the id of the NFT on the NFT contract
     /// @param startTime uint256 timestamp when the auction should commence
     /// @param endTime uint256 timestamp when auction should end
     /// @param reservePrice minimum price for bids
     /// @param currency address of the token bids should be made in
+    /// @return auctionId the index of the auction being created
     function createAuction(
         bool isERC721,
         address nftAddress,
-        uint256 nftId,
+        uint128 nftId,
         uint256 startTime,
         uint256 endTime,
         uint256 reservePrice,
@@ -78,22 +103,20 @@ contract Auction is Ownable {
         INFT nftContract = INFT(nftAddress);
 
         // transfer the nft to the platform
-        if (isERC721) {
-            nftContract.safeTransferFrom(
+        isERC721
+            ? nftContract.safeTransferFrom(
                 msg.sender,
-                address(treasury),
+                address(_treasury),
                 nftId,
                 ""
-            );
-        } else {
-            nftContract.safeTransferFrom(
+            )
+            : nftContract.safeTransferFrom(
                 msg.sender,
-                address(treasury),
+                address(_treasury),
                 nftId,
                 1,
                 ""
             );
-        }
 
         // save auction info
         unchecked {
@@ -118,54 +141,52 @@ contract Auction is Ownable {
     }
 
     /// @notice Allows bidding on a specifc auction
+    /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
+    /// @param auctionId the index of the auction to bid on
     /// @param amountFromBalance the amount to bid from msg.sender's balance in this contract
     /// @param externalFunds the amount to bid from funds in msg.sender's personal balance
+    /// @return a bool indicating success
     function bid(
         uint256 auctionId,
         uint256 amountFromBalance,
         uint256 externalFunds
-    ) external payable {
-        require(
-            registry.platformContracts(address(this)),
-            "This contract is deprecated"
-        );
-        require(
-            getAuctionStatus(auctionId) == "ACTIVE",
-            "Auction is not active"
-        );
+    ) external payable returns (bool) {
+        if (!_registry.platformContracts(address(this)))
+            revert ContractIsDeprecated();
+        if (getAuctionStatus(auctionId) != "ACTIVE")
+            revert AuctionIsNotActive();
+
         uint256 totalAmount = amountFromBalance +
             externalFunds +
             // this allows the top bidder to top off their bid
             bids[auctionId][msg.sender].amount;
-        require(
-            totalAmount > bids[auctionId][highestBidder[auctionId]].amount,
-            "Bid is not high enough"
-        );
-        require(
-            totalAmount >= auctionInfo[auctionId].reservePrice,
-            "Bid is lower than the reserve price"
-        );
+
+        if (totalAmount <= bids[auctionId][highestBidder[auctionId]].amount)
+            revert AuctionIsNotActive();
+        if (totalAmount < auctionInfo[auctionId].reservePrice)
+            revert BidIsNotHighEnough();
+
         address currency = auctionInfo[auctionId].currency;
-        uint256 claimableFunds = treasury.claimableFunds(msg.sender, currency);
+        uint256 claimableFunds = _treasury.claimableFunds(msg.sender, currency);
         require(amountFromBalance <= claimableFunds, "Not enough balance");
 
         if (currency != ETH) {
             IERC20 token = IERC20(currency);
             token.safeTransferFrom(
                 msg.sender,
-                address(treasury),
+                address(_treasury),
                 externalFunds
             );
         } else {
-            require(msg.value == externalFunds, "Mismatch of value and args");
+            if (msg.value != externalFunds) revert ArgumentsAndValueMismatch();
         }
 
         // next highest bid can be made claimable now,
         // also helps for figuring out how much more net is in escrow
         address lastHighestBidder = highestBidder[auctionId];
         uint256 lastHighestAmount = bids[auctionId][lastHighestBidder].amount;
-        uint256 escrowAmount = treasury.auctionEscrow(currency);
-        treasury.updateAuctionEscrow(
+        uint256 escrowAmount = _treasury.auctionEscrow(currency);
+        _treasury.updateAuctionEscrow(
             currency,
             escrowAmount + totalAmount - lastHighestAmount
         );
@@ -173,14 +194,14 @@ contract Auction is Ownable {
         // last bidder can claim their fund now
         if (lastHighestBidder != msg.sender) {
             delete bids[auctionId][lastHighestBidder].amount;
-            treasury.updateClaimableFunds(
+            _treasury.updateClaimableFunds(
                 lastHighestBidder,
                 currency,
                 claimableFunds + lastHighestAmount
             );
         }
         if (amountFromBalance > 0) {
-            treasury.updateClaimableFunds(
+            _treasury.updateClaimableFunds(
                 msg.sender,
                 currency,
                 claimableFunds - amountFromBalance
@@ -191,6 +212,7 @@ contract Auction is Ownable {
         highestBidder[auctionId] = msg.sender;
 
         emit BidPlaced(auctionId, totalAmount);
+        return true;
     }
 
     /// @notice Send NFT to auction winner and funds to auctioner's balance
@@ -199,10 +221,8 @@ contract Auction is Ownable {
     ///   and also accounts for the system fee and royalties (if applicable)
     function resolveAuction(uint256 auctionId) external {
         bytes32 status = getAuctionStatus(auctionId);
-        require(
-            status == "CANCELLED" || status == "ENDED",
-            "Can only resolve after the auction ends or is cancelled"
-        );
+        if (status != "CANCELLED" && status != "ENDED")
+            revert AuctionIsNotEndOrCancelled();
 
         AuctionInfo memory auctionInfo_ = auctionInfo[auctionId];
         address highestBidder_ = highestBidder[auctionId];
@@ -213,8 +233,8 @@ contract Auction is Ownable {
 
         // accounting logic
         address recipient;
-        if (totalFundsToPay > 0) {
-            treasury.proceedAuctionFunds(
+        if (totalFundsToPay != 0) {
+            _treasury.proceedAuctionFunds(
                 auctionId,
                 winningBid,
                 auctionInfo_.nftAddress
@@ -223,20 +243,20 @@ contract Auction is Ownable {
         } else {
             recipient = auctionInfo_.owner;
         }
-        if (auctionInfo_.isERC721) {
-            treasury.transferERC721To(
+
+        auctionInfo_.isERC721
+            ? _treasury.transferERC721To(
                 auctionInfo_.nftAddress,
                 recipient,
                 auctionInfo_.nftId
-            );
-        } else {
-            treasury.transferERC1155To(
+            )
+            : _treasury.transferERC1155To(
                 auctionInfo_.nftAddress,
                 recipient,
                 auctionInfo_.nftId,
                 1
             );
-        }
+
         claimed[auctionId] = true;
 
         emit ClaimAuctionNFT(
@@ -249,29 +269,27 @@ contract Auction is Ownable {
 
     /// @notice Allows contract owner or auctioner to cancel a pending or active auction
     function cancelAuction(uint256 auctionId) external {
-        require(
-            msg.sender == auctionInfo[auctionId].owner || msg.sender == owner(),
-            "Only owner or sale creator"
-        );
-        require(
-            getAuctionStatus(auctionId) == "ACTIVE" ||
-                getAuctionStatus(auctionId) == "PENDING",
-            "Must be active or pending"
-        );
+        if (msg.sender != auctionInfo[auctionId].owner && msg.sender != owner())
+            revert OnlyOwnerOrAuctionCreator();
+
+        bytes32 status = getAuctionStatus(auctionId);
+        if (status != "ACTIVE" && status != "PENDING")
+            revert AuctionMustBeActiveOrPending();
+
         cancelledAuction[auctionId] = true;
 
         address currency = auctionInfo[auctionId].currency;
         address highestBidder_ = highestBidder[auctionId];
         uint256 highestBid = bids[auctionId][highestBidder_].amount;
-        uint256 claimableFunds = treasury.claimableFunds(
+        uint256 claimableFunds = _treasury.claimableFunds(
             highestBidder_,
             currency
         );
-        uint256 escrowAmount = treasury.auctionEscrow(currency);
+        uint256 escrowAmount = _treasury.auctionEscrow(currency);
 
         // current highest bid moves from escrow to being reclaimable
-        treasury.updateAuctionEscrow(currency, escrowAmount - highestBid);
-        treasury.updateClaimableFunds(
+        _treasury.updateAuctionEscrow(currency, escrowAmount - highestBid);
+        _treasury.updateClaimableFunds(
             highestBidder_,
             currency,
             claimableFunds + highestBid
@@ -281,14 +299,12 @@ contract Auction is Ownable {
     }
 
     function getAuctionStatus(uint256 auctionId) public view returns (bytes32) {
-        require(
-            auctionId <= auctionIdCounter && auctionId > 0,
-            "Auction does not exist"
-        );
+        if (auctionId > auctionIdCounter || auctionId == 0)
+            revert AuctionDoesNotExist();
 
         if (
             cancelledAuction[auctionId] ||
-            !registry.platformContracts(address(this))
+            !_registry.platformContracts(address(this))
         ) return "CANCELLED";
 
         if (claimed[auctionId]) return "ENDED & CLAIMED";
@@ -312,22 +328,14 @@ contract Auction is Ownable {
         uint256 endTime,
         address currency
     ) private {
-        require(
-            registry.platformContracts(nftAddress),
-            "NFT is not in approved contract"
-        );
-        require(
-            registry.platformContracts(address(this)),
-            "This contract is deprecated"
-        );
-        require(
-            registry.approvedCurrencies(currency),
-            "Currency is not supported"
-        );
-        require(
-            INFT(nftAddress).supportsInterface(0x2a55205a),
-            "Contract must support ERC2981"
-        );
-        require(endTime > startTime, "Error in start/end params");
+        if (!_registry.platformContracts(nftAddress))
+            revert NFTContractIsNotApproved();
+        if (!_registry.platformContracts(address(this)))
+            revert ContractIsDeprecated();
+        if (!_registry.approvedCurrencies(currency))
+            revert CurrencyIsNotSupported();
+        if (!INFT(nftAddress).supportsInterface(0x2a55205a))
+            revert ContractMustSupportERC2981();
+        if (endTime <= startTime) revert EndTimeMustBeGreaterThanStartTime();
     }
 }
