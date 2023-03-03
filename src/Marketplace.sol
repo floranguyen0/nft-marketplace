@@ -68,6 +68,32 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 indexed newBalance
     );
 
+    error CanOnlySellOneNFT();
+    error ContractIsDeprecated();
+    error SaleIsNotActive();
+    error ZeroAddressNotAllowed();
+    error NotEnoughStock();
+    error NotEnoughBalance();
+    error InputValueAndPriceMismatch();
+    error SaleIsNotClosed();
+    error OnlyNFTOwnerCanClaim();
+    error StockAlreadySoldOrClaimed();
+    error NothingToClaim();
+    error OnlyOwnerOrSaleCreator();
+    error SaleMustBeActiveOrPending();
+    error AuctionIsNotActive();
+    error BidIsNotHighEnough();
+    error ArgumentsAndValueMismatch();
+    error AuctionIsNotEndOrCancelled();
+    error OnlyOwnerOrAuctionCreator();
+    error AuctionMustBeActiveOrPending();
+    error AuctionDoesNotExist();
+    error SaleDoesNotExist();
+    error NFTContractIsNotApproved();
+    error CurrencyIsNotSupported();
+    error ContractMustSupportERC2981();
+    error EndTimeMustBeGreaterThanStartTime();
+
     /*//////////////////////////////////////////////////////////////
                                STRUCTS
     //////////////////////////////////////////////////////////////*/
@@ -142,7 +168,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     /// @param endTime uint256 timestamp when sale should end
     /// @param price the price for each NFT
     /// @param currency address of the token bids should be made in
-    /// @return the index of the sale being created
+    /// @return saleId the index of the sale being created
     function createSale(
         bool isERC721,
         address nftAddress,
@@ -152,10 +178,10 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 endTime,
         uint256 price,
         address currency
-    ) external returns (uint256) {
+    ) external returns (uint256 saleId) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         if (isERC721) {
-            require(amount == 1, "Can only sell one NFT for ERC721");
+            if (amount != 1) revert CanOnlySellOneNFT();
         }
         INFT nftContract = INFT(nftAddress);
 
@@ -176,7 +202,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         unchecked {
             ++saleIdCounter;
         }
-        uint256 saleId = saleIdCounter;
+        saleId = saleIdCounter;
 
         sales[saleId] = SaleInfo({
             isERC721: isERC721,
@@ -192,7 +218,6 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         });
 
         emit SaleCreated(saleId, nftAddress, nftId);
-        return saleId;
     }
 
     /// @notice Allows purchase of NFTs from a sale
@@ -209,26 +234,22 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 amountToBuy,
         uint256 amountFromBalance
     ) external payable returns (bool) {
-        require(
-            _registry.platformContracts(address(this)),
-            "This contract is deprecated"
-        );
-        require(getSaleStatus(saleId) == "ACTIVE", "Sale is not active");
+        if (!_registry.platformContracts(address(this)))
+            revert ContractIsDeprecated();
+        if (getSaleStatus(saleId) != "ACTIVE") revert SaleIsNotActive();
+        if (recipient == address(0)) revert ZeroAddressNotAllowed();
         SaleInfo memory saleInfo = sales[saleId];
-        require(
-            amountToBuy <= saleInfo.amount - saleInfo.purchased,
-            "Not enough stock for purchase"
-        );
+        if (amountToBuy > saleInfo.amount - saleInfo.purchased)
+            revert NotEnoughStock();
 
         address currency = saleInfo.currency;
-        require(
-            amountFromBalance <= claimableFunds[msg.sender][currency],
-            "Not enough balance"
-        );
+
+        if (amountFromBalance > claimableFunds[msg.sender][currency])
+            revert NotEnoughBalance();
 
         uint256 nftId = saleInfo.nftId;
-
         INFT nftContract = INFT(saleInfo.nftAddress);
+
         (address artistAddress, uint256 royalties) = nftContract.royaltyInfo(
             nftId,
             amountToBuy * saleInfo.price
@@ -244,10 +265,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
                 (amountToBuy * saleInfo.price) - amountFromBalance
             );
         } else {
-            require(
-                msg.value == (amountToBuy * saleInfo.price) - amountFromBalance,
-                "msg.value + balance != price"
-            );
+            if (msg.value != (amountToBuy * saleInfo.price) - amountFromBalance)
+                revert InputValueAndPriceMismatch();
         }
         if (amountFromBalance > 0) {
             claimableFunds[msg.sender][currency] -= amountFromBalance;
@@ -264,7 +283,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             claimableFunds[artistAddress][currency] += royalties;
         } else {
             // since the artist is the seller
-            royalties = 0;
+            delete royalties;
         }
 
         // seller gains
@@ -304,36 +323,31 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     /// @param saleId the index of the sale to claim from
     function claimSaleNfts(uint256 saleId) external {
         bytes32 status = getSaleStatus(saleId);
-        require(
-            status == "CANCELLED" || status == "ENDED",
-            "Cannot claim before sale closes"
-        );
+        if (status != "CANCELLED" && status != "ENDED")
+            revert SaleIsNotClosed();
+
         SaleInfo memory saleInfo = sales[saleId];
-        require(msg.sender == saleInfo.owner, "Only nft owner can claim");
-        require(
-            saleInfo.purchased < saleInfo.amount,
-            "Stock already sold or claimed"
-        );
+        if (msg.sender != saleInfo.owner) revert OnlyNFTOwnerCanClaim();
+        if (saleInfo.purchased == saleInfo.amount)
+            revert StockAlreadySoldOrClaimed();
 
         uint256 stock = saleInfo.amount - saleInfo.purchased;
         // update the sale info and send the nfts back to the seller
         sales[saleId].purchased = saleInfo.amount;
-        if (saleInfo.isERC721) {
-            INFT(saleInfo.nftAddress).safeTransferFrom(
+        saleInfo.isERC721
+            ? INFT(saleInfo.nftAddress).safeTransferFrom(
                 address(this),
                 saleInfo.owner,
                 saleInfo.nftId,
                 ""
-            );
-        } else {
-            INFT(saleInfo.nftAddress).safeTransferFrom(
+            )
+            : INFT(saleInfo.nftAddress).safeTransferFrom(
                 address(this),
                 saleInfo.owner,
                 saleInfo.nftId,
                 stock,
                 ""
             );
-        }
 
         emit ClaimSaleNFTs(saleId, msg.sender, stock);
     }
@@ -342,16 +356,23 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     /// @dev use address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa) for ETH
     function claimFunds(address tokenAddress) external {
         uint256 payout = claimableFunds[msg.sender][tokenAddress];
-        require(payout > 0, "Nothing to claim");
+        if (payout == 0) revert NothingToClaim();
         if (tokenAddress != ETH) {
             delete claimableFunds[msg.sender][tokenAddress];
             IERC20(tokenAddress).safeTransfer(msg.sender, payout);
         } else {
             delete claimableFunds[msg.sender][tokenAddress];
-            (bool success, bytes memory reason) = msg.sender.call{
-                value: payout
-            }("");
-            require(success, string(reason));
+
+            (bool success, ) = msg.sender.call{value: payout}("");
+            // bubble up the error meassage if the transfer fails
+            if (!success) {
+                assembly {
+                    let ptr := mload(0x40)
+                    let size := returndatasize()
+                    returndatacopy(ptr, 0, size)
+                    revert(ptr, size)
+                }
+            }
         }
 
         emit ClaimFunds(msg.sender, tokenAddress, payout);
@@ -360,15 +381,13 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     /// @notice Allows contract owner or seller to cancel a pending or active sale
     /// @param saleId the index of the sale to cancel
     function cancelSale(uint256 saleId) external {
-        require(
-            msg.sender == sales[saleId].owner || msg.sender == owner(),
-            "Only owner or sale creator"
-        );
-        require(
-            getSaleStatus(saleId) == "ACTIVE" ||
-                getSaleStatus(saleId) == "PENDING",
-            "Must be active or pending"
-        );
+        if (msg.sender != sales[saleId].owner && msg.sender != owner())
+            revert OnlyOwnerOrSaleCreator();
+
+        bytes32 status = getAuctionStatus(saleId);
+        if (status != "ACTIVE" && status != "PENDING")
+            revert SaleMustBeActiveOrPending();
+
         cancelledSale[saleId] = true;
 
         emit SaleCancelled(saleId);
@@ -387,7 +406,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     /// @param endTime uint256 timestamp when auction should end
     /// @param reservePrice minimum price for bids
     /// @param currency address of the token bids should be made in
-    /// @return the index of the auction being created
+    /// @return auctionId the index of the auction being created
     function createAuction(
         bool isERC721,
         address nftAddress,
@@ -396,7 +415,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 endTime,
         uint256 reservePrice,
         address currency
-    ) external returns (uint256) {
+    ) external returns (uint128 auctionId) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
         INFT nftContract = INFT(nftAddress);
 
@@ -417,7 +436,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         unchecked {
             ++auctionIdCounter;
         }
-        uint128 auctionId = auctionIdCounter;
+        auctionId = auctionIdCounter;
 
         auctions[auctionId] = AuctionInfo({
             isERC721: isERC721,
@@ -432,7 +451,6 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         });
 
         emit NewAuction(auctionId, auctions[auctionId]);
-        return auctionId;
     }
 
     /// @notice Allows bidding on a specifc auction
@@ -446,37 +464,29 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 amountFromBalance,
         uint256 externalFunds
     ) external payable returns (bool) {
-        require(
-            _registry.platformContracts(address(this)),
-            "This contract is deprecated"
-        );
-        require(
-            getAuctionStatus(auctionId) == "ACTIVE",
-            "Auction is not active"
-        );
+        if (!_registry.platformContracts(address(this)))
+            revert ContractIsDeprecated();
+        if (getAuctionStatus(auctionId) != "ACTIVE")
+            revert AuctionIsNotActive();
+
         uint256 totalAmount = amountFromBalance +
             externalFunds +
             // this allows the top bidder to top off their bid
             bids[auctionId][msg.sender].amount;
-        require(
-            totalAmount > bids[auctionId][highestBidder[auctionId]].amount,
-            "Bid is not high enough"
-        );
-        require(
-            totalAmount >= auctions[auctionId].reservePrice,
-            "Bid is lower than the reserve price"
-        );
+        if (totalAmount <= bids[auctionId][highestBidder[auctionId]].amount)
+            revert AuctionIsNotActive();
+        if (totalAmount < auctions[auctionId].reservePrice)
+            revert BidIsNotHighEnough();
+
         address currency = auctions[auctionId].currency;
-        require(
-            amountFromBalance <= claimableFunds[msg.sender][currency],
-            "Not enough balance"
-        );
+        if (amountFromBalance > claimableFunds[msg.sender][currency])
+            revert NotEnoughBalance();
 
         if (currency != ETH) {
             IERC20 token = IERC20(currency);
             token.safeTransferFrom(msg.sender, address(this), externalFunds);
         } else {
-            require(msg.value == externalFunds, "Mismatch of value and args");
+            if (msg.value != externalFunds) revert ArgumentsAndValueMismatch();
         }
 
         // next highest bid can be made claimable now,
@@ -495,8 +505,11 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
                 claimableFunds[lastHighestBidder][currency]
             );
         }
-        if (amountFromBalance > 0) {
-            claimableFunds[msg.sender][currency] -= amountFromBalance;
+        if (amountFromBalance != 0) {
+            unchecked {
+                claimableFunds[msg.sender][currency] -= amountFromBalance;
+            }
+
             emit BalanceUpdated(msg.sender, currency, amountFromBalance);
         }
         bids[auctionId][msg.sender].amount = totalAmount;
@@ -513,10 +526,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     ///   and also accounts for the system fee and royalties (if applicable)
     function resolveAuction(uint256 auctionId) external {
         bytes32 status = getAuctionStatus(auctionId);
-        require(
-            status == "CANCELLED" || status == "ENDED",
-            "Can only resolve after the auction ends or is cancelled"
-        );
+        if (status != "CANCELLED" && status != "ENDED")
+            revert AuctionIsNotEndOrCancelled();
 
         AuctionInfo memory auctionInfo = auctions[auctionId];
         address highestBidder_ = highestBidder[auctionId];
@@ -528,28 +539,27 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
         // accounting logic
         address recipient;
-        if (totalFundsToPay > 0) {
+        if (totalFundsToPay != 0) {
             _nftPayment(auctionId, winningBid, nftContract);
             recipient = highestBidder_;
         } else {
             recipient = auctionInfo.owner;
         }
-        if (auctionInfo.isERC721) {
-            nftContract.safeTransferFrom(
+        auctionInfo.isERC721
+            ? nftContract.safeTransferFrom(
                 address(this),
                 recipient,
                 auctionInfo.nftId,
                 ""
-            );
-        } else {
-            nftContract.safeTransferFrom(
+            )
+            : nftContract.safeTransferFrom(
                 address(this),
                 recipient,
                 auctionInfo.nftId,
                 1,
                 ""
             );
-        }
+
         claimed[auctionId] = true;
 
         emit ClaimAuctionNFT(
@@ -562,15 +572,12 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
     /// @notice Allows contract owner or auctioner to cancel a pending or active auction
     function cancelAuction(uint256 auctionId) external {
-        require(
-            msg.sender == auctions[auctionId].owner || msg.sender == owner(),
-            "Only owner or sale creator"
-        );
-        require(
-            getAuctionStatus(auctionId) == "ACTIVE" ||
-                getAuctionStatus(auctionId) == "PENDING",
-            "Must be active or pending"
-        );
+        if (msg.sender != auctions[auctionId].owner && msg.sender != owner())
+            revert OnlyOwnerOrAuctionCreator();
+
+        bytes32 status = getAuctionStatus(auctionId);
+        if (status != "ACTIVE" && status != "PENDING")
+            revert AuctionMustBeActiveOrPending();
 
         cancelledAuction[auctionId] = true;
 
@@ -579,7 +586,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 highestBid = bids[auctionId][highestBidder_].amount;
 
         // current highest bid moves from escrow to being reclaimable
-        escrow[currency] -= highestBid;
+        unchecked {
+            escrow[currency] -= highestBid;
+        }
         claimableFunds[highestBidder_][currency] += highestBid;
 
         emit BalanceUpdated(
@@ -595,10 +604,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     //////////////////////////////////////////////////////////////*/
 
     function getAuctionStatus(uint256 auctionId) public view returns (bytes32) {
-        require(
-            auctionId <= auctionIdCounter && auctionId > 0,
-            "Auction does not exist"
-        );
+        if (auctionId > auctionIdCounter || auctionId == 0)
+            revert AuctionDoesNotExist();
 
         if (
             cancelledAuction[auctionId] ||
@@ -621,7 +628,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     }
 
     function getSaleStatus(uint256 saleId) public view returns (bytes32) {
-        require(saleId <= saleIdCounter && saleId > 0, "Sale does not exist");
+        if (saleId > saleIdCounter || saleId == 0) revert SaleDoesNotExist();
 
         if (
             cancelledSale[saleId] || !_registry.platformContracts(address(this))
@@ -653,23 +660,15 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 endTime,
         address currency
     ) private {
-        require(
-            _registry.platformContracts(nftAddress),
-            "NFT is not in approved contract"
-        );
-        require(
-            _registry.platformContracts(address(this)),
-            "This contract is deprecated"
-        );
-        require(
-            _registry.approvedCurrencies(currency),
-            "Currency is not supported"
-        );
-        require(
-            INFT(nftAddress).supportsInterface(0x2a55205a),
-            "Contract must support ERC2981"
-        );
-        require(endTime > startTime, "Error in start/end params");
+        if (!_registry.platformContracts(nftAddress))
+            revert NFTContractIsNotApproved();
+        if (!_registry.platformContracts(address(this)))
+            revert ContractIsDeprecated();
+        if (!_registry.approvedCurrencies(currency))
+            revert CurrencyIsNotSupported();
+        if (!INFT(nftAddress).supportsInterface(0x2a55205a))
+            revert ContractMustSupportERC2981();
+        if (endTime <= startTime) revert EndTimeMustBeGreaterThanStartTime();
     }
 
     /// @notice internal function for handling royalties and system fee
@@ -681,7 +680,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         AuctionInfo memory auctionInfo = auctions[auctionId];
         address currency = auctionInfo.currency;
 
-        escrow[currency] -= fundsToPay;
+        unchecked {
+            escrow[currency] -= fundsToPay;
+        }
         // if this is from a successful auction
         (address artistAddress, uint256 royalties) = nftContract.royaltyInfo(
             auctionInfo.nftId,
@@ -690,9 +691,11 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
         // system fee
         (address systemWallet, uint256 fee) = _registry.feeInfo(fundsToPay);
-        fundsToPay -= fee;
+        unchecked {
+            fundsToPay -= fee;
+        }
         claimableFunds[systemWallet][currency] += fee;
-        
+
         emit BalanceUpdated(
             systemWallet,
             currency,
@@ -701,7 +704,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
         // artist royalty if artist isn't the seller
         if (auctionInfo.owner != artistAddress) {
-            fundsToPay -= royalties;
+            unchecked {
+                fundsToPay -= royalties;
+            }
             claimableFunds[artistAddress][currency] += royalties;
 
             emit BalanceUpdated(
