@@ -15,9 +15,11 @@ contract Sale is Ownable {
     using SafeERC20 for IERC20;
 
     // address alias for using ETH as a currency
-    address constant ETH = address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
-    IRegistry immutable registry;
-    ITreasury immutable treasury;
+    address private constant ETH =
+        address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
+    IRegistry private immutable _registry;
+    ITreasury private immutable _treasury;
+
     uint256 public saleIdCounter; // saleIdCounter starts from 1
 
     event SaleCreated(
@@ -37,27 +39,44 @@ contract Sale is Ownable {
         uint256 indexed amount
     );
 
+    error CanOnlySellOneNFT();
+    error ContractIsDeprecated();
+    error SaleIsNotActive();
+    error ZeroAddressNotAllowed();
+    error NotEnoughStock();
+    error NotEnoughBalance();
+    error InputValueAndPriceMismatch();
+    error SaleIsNotClosed();
+    error OnlyNFTOwnerCanClaim();
+    error StockAlreadySoldOrClaimed();
+    error SaleMustBeActiveOrPending();
+    error SaleDoesNotExist();
+    error NFTContractIsNotApproved();
+    error CurrencyIsNotSupported();
+    error ContractMustSupportERC2981();
+    error EndTimeMustBeGreaterThanStartTime();
+
     struct SaleInfo {
+        uint128 nftId;
         bool isERC721;
         address nftAddress;
-        uint256 nftId;
         address owner;
+        address currency; // use zero address or 0xaaa for ETH
         uint256 amount; // amount of NFTs being sold
         uint256 purchased; // amount of NFTs purchased thus far
         uint256 startTime;
         uint256 endTime;
         uint256 price;
-        address currency;
     }
 
-    mapping(uint256 => SaleInfo) public saleInfo;
-    mapping(uint256 => bool) public cancelledSale;
+    mapping(uint256 => SaleInfo) public saleInfo; // saleId => saleInfo
+    mapping(uint256 => bool) public cancelledSale; // saleId => isSaleCancelled
     // saleId => purchaserAddress => amountPurchased
     mapping(uint256 => mapping(address => uint256)) public purchased;
 
     constructor(address registryAddress, address treasuryAddress) {
-        registry = IRegistry(registryAddress);
-        treasury = ITreasury(treasuryAddress);
+        _registry = IRegistry(registryAddress);
+        _treasury = ITreasury(treasuryAddress);
     }
 
     /// @notice Creates a sale of ERC1155 and ERC721 NFTs
@@ -67,7 +86,7 @@ contract Sale is Ownable {
     function createSale(
         bool isERC721,
         address nftAddress,
-        uint256 nftId,
+        uint128 nftId,
         uint256 amount,
         uint256 startTime,
         uint256 endTime,
@@ -86,22 +105,20 @@ contract Sale is Ownable {
         INFT nftContract = INFT(nftAddress);
 
         // transfer nft to the platform
-        if (isERC721) {
-            nftContract.safeTransferFrom(
+        isERC721
+            ? nftContract.safeTransferFrom(
                 msg.sender,
-                address(treasury),
+                address(_treasury),
                 nftId,
                 ""
-            );
-        } else {
-            nftContract.safeTransferFrom(
+            )
+            : nftContract.safeTransferFrom(
                 msg.sender,
-                address(treasury),
+                address(_treasury),
                 nftId,
                 amount,
                 ""
             );
-        }
 
         // save sale info
         unchecked {
@@ -133,22 +150,19 @@ contract Sale is Ownable {
         uint256 amountToBuy,
         uint256 amountFromBalance
     ) external payable {
-        require(
-            registry.platformContracts(address(this)),
-            "This contract is deprecated"
-        );
-        require(getSaleStatus(saleId) == "ACTIVE", "Sale is not active");
+        if (!_registry.platformContracts(address(this)))
+            revert ContractIsDeprecated();
+        if (getSaleStatus(saleId) != "ACTIVE") revert SaleIsNotActive();
+        if (recipient == address(0)) revert ZeroAddressNotAllowed();
+
         SaleInfo memory saleInfo_ = saleInfo[saleId];
-        require(
-            amountToBuy <= saleInfo_.amount - saleInfo_.purchased,
-            "Not enough NFT for purchase"
-        );
+        if (amountToBuy > saleInfo_.amount - saleInfo_.purchased)
+            revert NotEnoughStock();
 
         address currency = saleInfo_.currency;
-        require(
-            amountFromBalance <= treasury.claimableFunds(msg.sender, currency),
-            "Not enough balance"
-        );
+
+        if (amountFromBalance > _treasury.claimableFunds(msg.sender, currency))
+            revert NotEnoughBalance();
 
         (address artistAddress, uint256 royalties) = INFT(saleInfo_.nftAddress)
             .royaltyInfo(saleInfo_.nftId, amountToBuy * saleInfo_.price);
@@ -159,20 +173,18 @@ contract Sale is Ownable {
 
             token.safeTransferFrom(
                 msg.sender,
-                address(treasury),
+                address(_treasury),
                 (amountToBuy * saleInfo_.price) - amountFromBalance
             );
         } else {
-            require(
-                msg.value ==
-                    (amountToBuy * saleInfo_.price) - amountFromBalance,
-                "msg.value + balance != price"
-            );
+            if (
+                msg.value != (amountToBuy * saleInfo_.price) - amountFromBalance
+            ) revert InputValueAndPriceMismatch();
         }
-        uint256 claimableFunds = treasury.claimableFunds(msg.sender, currency);
+        uint256 claimableFunds = _treasury.claimableFunds(msg.sender, currency);
 
-        if (amountFromBalance > 0) {
-            treasury.updateClaimableFunds(
+        if (amountFromBalance != 0) {
+            _treasury.updateClaimableFunds(
                 msg.sender,
                 currency,
                 claimableFunds - amountFromBalance
@@ -180,10 +192,10 @@ contract Sale is Ownable {
         }
 
         // system fee
-        (address systemWallet, uint256 fee) = registry.feeInfo(
+        (address systemWallet, uint256 fee) = _registry.feeInfo(
             amountToBuy * saleInfo_.price
         );
-        treasury.updateClaimableFunds(
+        _treasury.updateClaimableFunds(
             systemWallet,
             currency,
             claimableFunds + fee
@@ -191,19 +203,19 @@ contract Sale is Ownable {
 
         // artist royalty if artist isn't the seller
         if (saleInfo_.owner != artistAddress) {
-            treasury.updateClaimableFunds(
+            _treasury.updateClaimableFunds(
                 artistAddress,
                 currency,
                 claimableFunds + royalties
             );
         } else {
             // since the artist is the seller
-            royalties = 0;
+            delete royalties;
         }
 
         // seller gains
         uint256 sellerGains = (amountToBuy * saleInfo_.price) - fee - royalties;
-        treasury.updateClaimableFunds(
+        _treasury.updateClaimableFunds(
             saleInfo_.owner,
             currency,
             claimableFunds + sellerGains
@@ -214,20 +226,18 @@ contract Sale is Ownable {
         purchased[saleId][msg.sender] += amountToBuy;
 
         // send the nft to the buyer
-        if (saleInfo_.isERC721) {
-            treasury.transferERC721To(
+        saleInfo_.isERC721
+            ? _treasury.transferERC721To(
                 saleInfo_.nftAddress,
                 recipient,
                 saleInfo_.nftId
-            );
-        } else {
-            treasury.transferERC1155To(
+            )
+            : _treasury.transferERC1155To(
                 saleInfo_.nftAddress,
                 recipient,
                 saleInfo_.nftId,
                 amountToBuy
             );
-        }
 
         emit Purchase(saleId, msg.sender, recipient);
     }
@@ -253,44 +263,39 @@ contract Sale is Ownable {
     /// @param saleId the index of the sale to claim from
     function claimSaleNfts(uint256 saleId) external {
         bytes32 status = getSaleStatus(saleId);
-        require(
-            status == "CANCELLED" || status == "ENDED",
-            "Cannot claim before sale closes"
-        );
+        if (status != "CANCELLED" && status != "ENDED")
+            revert SaleIsNotClosed();
 
         SaleInfo memory saleInfo_ = saleInfo[saleId];
-        require(msg.sender == saleInfo_.owner, "Only nft owner can claim");
-        require(
-            saleInfo_.purchased < saleInfo_.amount,
-            "Stock already sold or claimed"
-        );
+        if (msg.sender != saleInfo_.owner) revert OnlyNFTOwnerCanClaim();
+        if (saleInfo_.purchased == saleInfo_.amount)
+            revert StockAlreadySoldOrClaimed();
 
         uint256 stock = saleInfo_.amount - saleInfo_.purchased;
         // update the sale info and send the nfts back to the seller
         saleInfo[saleId].purchased = saleInfo_.amount;
-        if (saleInfo_.isERC721) {
-            treasury.transferERC721To(
+        saleInfo_.isERC721
+            ? _treasury.transferERC721To(
                 saleInfo_.nftAddress,
                 saleInfo_.owner,
                 saleInfo_.nftId
-            );
-        } else {
-            treasury.transferERC1155To(
+            )
+            : _treasury.transferERC1155To(
                 saleInfo_.nftAddress,
                 saleInfo_.owner,
                 saleInfo_.nftId,
                 stock
             );
-        }
 
         emit ClaimSaleNFTs(saleId, msg.sender, stock);
     }
 
     function getSaleStatus(uint256 saleId) public view returns (bytes32) {
-        require(saleId <= saleIdCounter && saleId > 0, "Sale does not exist");
+        if (saleId > saleIdCounter || saleId == 0) revert SaleDoesNotExist();
 
-        if (cancelledSale[saleId] || !registry.platformContracts(address(this)))
-            return "CANCELLED";
+        if (
+            cancelledSale[saleId] || !_registry.platformContracts(address(this))
+        ) return "CANCELLED";
 
         SaleInfo memory saleInfo_ = saleInfo[saleId];
 
@@ -317,25 +322,15 @@ contract Sale is Ownable {
         uint256 endTime,
         address currency
     ) private {
-        if (isERC721) {
-            require(amount == 1, "Can only sell one NFT for ERC721");
-        }
-        require(
-            registry.platformContracts(nftAddress),
-            "NFT is not in approved contract"
-        );
-        require(
-            registry.platformContracts(address(this)),
-            "This contract is deprecated"
-        );
-        require(
-            registry.approvedCurrencies(currency),
-            "Currency is not supported"
-        );
-        require(
-            INFT(nftAddress).supportsInterface(0x2a55205a),
-            "Contract must support ERC2981"
-        );
-        require(endTime > startTime, "Error in start/end params");
+        if (isERC721 && amount != 1) revert CanOnlySellOneNFT();
+        if (!_registry.platformContracts(nftAddress))
+            revert NFTContractIsNotApproved();
+        if (!_registry.platformContracts(address(this)))
+            revert ContractIsDeprecated();
+        if (!_registry.approvedCurrencies(currency))
+            revert CurrencyIsNotSupported();
+        if (!INFT(nftAddress).supportsInterface(0x2a55205a))
+            revert ContractMustSupportERC2981();
+        if (endTime <= startTime) revert EndTimeMustBeGreaterThanStartTime();
     }
 }
