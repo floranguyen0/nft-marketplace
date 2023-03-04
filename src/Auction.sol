@@ -50,6 +50,7 @@ contract Auction is Ownable {
     error CurrencyIsNotSupported();
     error ContractMustSupportERC2981();
     error EndTimeMustBeGreaterThanStartTime();
+    error UnexpectedError();
 
     struct AuctionInfo {
         uint128 id; // auctionId
@@ -168,7 +169,7 @@ contract Auction is Ownable {
 
         address currency = auctionInfo[auctionId].currency;
         uint256 claimableFunds = _treasury.claimableFunds(msg.sender, currency);
-        require(amountFromBalance <= claimableFunds, "Not enough balance");
+        if (amountFromBalance > claimableFunds) revert NotEnoughBalance();
 
         if (currency != ETH) {
             IERC20 token = IERC20(currency);
@@ -207,6 +208,7 @@ contract Auction is Ownable {
                 claimableFunds - amountFromBalance
             );
         }
+
         bids[auctionId][msg.sender].amount = totalAmount;
         bids[auctionId][msg.sender].timestamp = block.timestamp;
         highestBidder[auctionId] = msg.sender;
@@ -319,7 +321,7 @@ contract Auction is Ownable {
 
         if (block.timestamp > endTime) return "ENDED";
 
-        revert("error");
+        revert UnexpectedError();
     }
 
     function _beforeAuction(

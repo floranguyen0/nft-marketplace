@@ -55,6 +55,7 @@ contract Sale is Ownable {
     error CurrencyIsNotSupported();
     error ContractMustSupportERC2981();
     error EndTimeMustBeGreaterThanStartTime();
+    error OnlyOwnerOrSaleCreator();
 
     struct SaleInfo {
         uint128 nftId;
@@ -153,7 +154,17 @@ contract Sale is Ownable {
         if (!_registry.platformContracts(address(this)))
             revert ContractIsDeprecated();
         if (getSaleStatus(saleId) != "ACTIVE") revert SaleIsNotActive();
-        if (recipient == address(0)) revert ZeroAddressNotAllowed();
+
+        assembly {
+            if iszero(recipient) {
+                let ptr := mload(0x40)
+                mstore(
+                    ptr,
+                    0x8579befe00000000000000000000000000000000000000000000000000000000
+                ) // selector for `ZeroAddressNotAllowed()`
+                revert(ptr, 0x4)
+            }
+        }
 
         SaleInfo memory saleInfo_ = saleInfo[saleId];
         if (amountToBuy > saleInfo_.amount - saleInfo_.purchased)
@@ -244,15 +255,13 @@ contract Sale is Ownable {
 
     /// @notice Allows contract owner or seller to cancel a pending or active sale
     function cancelSale(uint256 saleId) external {
-        require(
-            msg.sender == saleInfo[saleId].owner || msg.sender == owner(),
-            "Only owner or sale creator"
-        );
-        require(
-            getSaleStatus(saleId) == "ACTIVE" ||
-                getSaleStatus(saleId) == "PENDING",
-            "Must be active or pending"
-        );
+        if (msg.sender != saleInfo[saleId].owner && msg.sender != owner())
+            revert OnlyOwnerOrSaleCreator();
+
+        bytes32 status = getSaleStatus(saleId);
+        if (status != "ACTIVE" && status != "PENDING")
+            revert SaleMustBeActiveOrPending();
+
         cancelledSale[saleId] = true;
 
         emit SaleCancelled(saleId);
