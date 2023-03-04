@@ -56,6 +56,7 @@ contract Sale is Ownable {
     error ContractMustSupportERC2981();
     error EndTimeMustBeGreaterThanStartTime();
     error OnlyOwnerOrSaleCreator();
+    error UnexpectedError();
 
     struct SaleInfo {
         uint128 nftId;
@@ -320,7 +321,7 @@ contract Sale is Ownable {
             saleInfo_.purchased == saleInfo_.amount
         ) return "ENDED";
 
-        revert("Unexpected error");
+        revert UnexpectedError();
     }
 
     function _validateSale(
