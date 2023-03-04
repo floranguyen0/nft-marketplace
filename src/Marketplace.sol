@@ -239,13 +239,23 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         if (!_registry.platformContracts(address(this)))
             revert ContractIsDeprecated();
         if (getSaleStatus(saleId) != "ACTIVE") revert SaleIsNotActive();
-        if (recipient == address(0)) revert ZeroAddressNotAllowed();
+
+        assembly {
+            if iszero(recipient) {
+                let ptr := mload(0x40)
+                mstore(
+                    ptr,
+                    0x8579befe00000000000000000000000000000000000000000000000000000000
+                ) // selector for `ZeroAddressNotAllowed()`
+                revert(ptr, 0x4)
+            }
+        }
+
         SaleInfo memory saleInfo = sales[saleId];
         if (amountToBuy > saleInfo.amount - saleInfo.purchased)
             revert NotEnoughStock();
 
         address currency = saleInfo.currency;
-
         if (amountFromBalance > claimableFunds[msg.sender][currency])
             revert NotEnoughBalance();
 
