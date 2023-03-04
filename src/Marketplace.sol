@@ -68,6 +68,10 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 indexed newBalance
     );
 
+    /*//////////////////////////////////////////////////////////////
+                                ERRORS
+    //////////////////////////////////////////////////////////////*/
+
     error CanOnlySellOneNFT();
     error ContractIsDeprecated();
     error SaleIsNotActive();
@@ -93,6 +97,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     error CurrencyIsNotSupported();
     error ContractMustSupportERC2981();
     error EndTimeMustBeGreaterThanStartTime();
+    error UnexpectedError();
 
     /*//////////////////////////////////////////////////////////////
                                STRUCTS
@@ -180,9 +185,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         address currency
     ) external returns (uint256 saleId) {
         _beforeSaleOrAuction(nftAddress, startTime, endTime, currency);
-        if (isERC721) {
-            if (amount != 1) revert CanOnlySellOneNFT();
-        }
+        if (isERC721 && amount != 1) revert CanOnlySellOneNFT();
+
         INFT nftContract = INFT(nftAddress);
 
         // transfer nft to the platform
@@ -200,8 +204,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         unchecked {
             ++saleIdCounter;
         }
-        saleId = saleIdCounter;
 
+        saleId = saleIdCounter;
         sales[saleId] = SaleInfo({
             isERC721: isERC721,
             nftAddress: nftAddress,
@@ -354,6 +358,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     function claimFunds(address tokenAddress) external {
         uint256 payout = claimableFunds[msg.sender][tokenAddress];
         if (payout == 0) revert NothingToClaim();
+
         if (tokenAddress != ETH) {
             delete claimableFunds[msg.sender][tokenAddress];
             IERC20(tokenAddress).safeTransfer(msg.sender, payout);
@@ -431,8 +436,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         unchecked {
             ++auctionIdCounter;
         }
-        auctionId = auctionIdCounter;
 
+        auctionId = auctionIdCounter;
         auctions[auctionId] = AuctionInfo({
             isERC721: isERC721,
             id: auctionId,
@@ -468,6 +473,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             externalFunds +
             // this allows the top bidder to top off their bid
             bids[auctionId][msg.sender].amount;
+
         if (totalAmount <= bids[auctionId][highestBidder[auctionId]].amount)
             revert AuctionIsNotActive();
         if (totalAmount < auctions[auctionId].reservePrice)
@@ -494,6 +500,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         if (lastHighestBidder != msg.sender) {
             delete bids[auctionId][lastHighestBidder].amount;
             claimableFunds[lastHighestBidder][currency] += lastHighestAmount;
+
             emit BalanceUpdated(
                 lastHighestBidder,
                 currency,
@@ -507,6 +514,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
             emit BalanceUpdated(msg.sender, currency, amountFromBalance);
         }
+
         bids[auctionId][msg.sender].amount = totalAmount;
         bids[auctionId][msg.sender].timestamp = block.timestamp;
         highestBidder[auctionId] = msg.sender;
@@ -619,7 +627,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
         if (block.timestamp > endTime) return "ENDED";
 
-        revert("error");
+        revert UnexpectedError();
     }
 
     function getSaleStatus(uint256 saleId) public view returns (bytes32) {
@@ -642,7 +650,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             saleInfo.purchased == saleInfo.amount
         ) return "ENDED";
 
-        revert("Unexpected error");
+        revert UnexpectedError();
     }
 
     /*//////////////////////////////////////////////////////////////
