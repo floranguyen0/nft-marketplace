@@ -299,15 +299,16 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             delete royalties;
         }
 
-        // seller gains
-        claimableFunds[saleInfo.owner][currency] +=
-            (amountToBuy * saleInfo.price) -
-            fee -
-            royalties;
-
-        // update the sale info
-        sales[saleId].purchased += amountToBuy;
-        purchased[saleId][msg.sender] += amountToBuy;
+        unchecked {
+            // seller gains
+            claimableFunds[saleInfo.owner][currency] +=
+                (amountToBuy * saleInfo.price) -
+                fee -
+                royalties;
+            // update the sale info
+            sales[saleId].purchased += amountToBuy;
+            purchased[saleId][msg.sender] += amountToBuy;
+        }
 
         // send the nft to the buyer
         saleInfo.isERC721
@@ -504,12 +505,18 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         // also helps for figuring out how much more net is in escrow
         address lastHighestBidder = highestBidder[auctionId];
         uint256 lastHighestAmount = bids[auctionId][lastHighestBidder].amount;
-        escrow[currency] += totalAmount - lastHighestAmount;
+        unchecked {
+            escrow[currency] += totalAmount - lastHighestAmount;
+        }
 
         // last bidder can claim their fund now
         if (lastHighestBidder != msg.sender) {
             delete bids[auctionId][lastHighestBidder].amount;
-            claimableFunds[lastHighestBidder][currency] += lastHighestAmount;
+            unchecked {
+                claimableFunds[lastHighestBidder][
+                    currency
+                ] += lastHighestAmount;
+            }
 
             emit BalanceUpdated(
                 lastHighestBidder,
@@ -601,8 +608,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         // current highest bid moves from escrow to being reclaimable
         unchecked {
             escrow[currency] -= highestBid;
+            claimableFunds[highestBidder_][currency] += highestBid;
         }
-        claimableFunds[highestBidder_][currency] += highestBid;
 
         emit BalanceUpdated(
             highestBidder_,
@@ -707,7 +714,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         unchecked {
             fundsToPay -= fee;
         }
-        claimableFunds[systemWallet][currency] += fee;
+        unchecked {
+            claimableFunds[systemWallet][currency] += fee;
+        }
 
         emit BalanceUpdated(
             systemWallet,
@@ -720,7 +729,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             unchecked {
                 fundsToPay -= royalties;
             }
-            claimableFunds[artistAddress][currency] += royalties;
+            unchecked {
+                claimableFunds[artistAddress][currency] += royalties;
+            }
 
             emit BalanceUpdated(
                 artistAddress,
@@ -730,9 +741,11 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         }
 
         // seller gains
-        claimableFunds[auctions[auctionId].owner][
-            auctions[auctionId].currency
-        ] += fundsToPay;
+        unchecked {
+            claimableFunds[auctions[auctionId].owner][
+                auctions[auctionId].currency
+            ] += fundsToPay;
+        }
 
         emit BalanceUpdated(
             auctions[auctionId].owner,
