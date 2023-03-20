@@ -251,23 +251,19 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             }
         }
 
-        uint256 nftId = sales[saleId].nftId;
-        uint256 price = sales[saleId].price;
-        uint256 salePurchased = sales[saleId].purchased;
-        address owner = sales[saleId].owner;
-
-        if (amountToBuy > sales[saleId].amount - salePurchased)
+        SaleInfo memory saleInfo = sales[saleId];
+        if (amountToBuy > saleInfo.amount - saleInfo.purchased)
             revert NotEnoughStock();
 
-        address currency = sales[saleId].currency;
+        address currency = saleInfo.currency;
         if (amountFromBalance > claimableFunds[msg.sender][currency])
             revert NotEnoughBalance();
 
-        INFT nftContract = INFT(sales[saleId].nftAddress);
+        INFT nftContract = INFT(saleInfo.nftAddress);
 
         (address artistAddress, uint256 royalties) = nftContract.royaltyInfo(
-            nftId,
-            amountToBuy * price
+            saleInfo.nftId,
+            amountToBuy * saleInfo.price
         );
 
         // send the nft price to the platform
@@ -277,50 +273,54 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             token.safeTransferFrom(
                 msg.sender,
                 address(this),
-                (amountToBuy * price) - amountFromBalance
+                (amountToBuy * saleInfo.price) - amountFromBalance
             );
-        } else {
-            if (msg.value != (amountToBuy * price) - amountFromBalance)
-                revert InputValueAndPriceMismatch();
-        }
+        } else if (
+            msg.value != (amountToBuy * saleInfo.price) - amountFromBalance
+        ) revert InputValueAndPriceMismatch();
+
         if (amountFromBalance != 0) {
-            unchecked {
-                claimableFunds[msg.sender][currency] -= amountFromBalance;
-            }
+            claimableFunds[msg.sender][currency] -= amountFromBalance;
         }
 
         // system fee
         (address systemWallet, uint256 fee) = _REGISTRY.feeInfo(
-            amountToBuy * price
+            amountToBuy * saleInfo.price
         );
         claimableFunds[systemWallet][currency] += fee;
 
         // artist royalty if artist isn't the seller
-        if (owner != artistAddress) {
+        if (saleInfo.owner != artistAddress) {
             claimableFunds[artistAddress][currency] += royalties;
         } else {
             // since the artist is the seller
             delete royalties;
         }
 
+        // seller gains
+        claimableFunds[saleInfo.owner][currency] +=
+            (amountToBuy * saleInfo.price) -
+            fee -
+            royalties;
+
+        // update the sale info
         unchecked {
-            // seller gains
-            claimableFunds[owner][currency] +=
-                (amountToBuy * price) -
-                fee -
-                royalties;
-            // update the sale info
-            salePurchased += amountToBuy;
+            sales[saleId].purchased += amountToBuy;
             purchased[saleId][msg.sender] += amountToBuy;
         }
 
         // send the nft to the buyer
-        sales[saleId].isERC721
-            ? nftContract.safeTransferFrom(address(this), recipient, nftId, "")
+        saleInfo.isERC721
+            ? nftContract.safeTransferFrom(
+                address(this),
+                recipient,
+                saleInfo.nftId,
+                ""
+            )
             : nftContract.safeTransferFrom(
                 address(this),
                 recipient,
-                nftId,
+                saleInfo.nftId,
                 amountToBuy,
                 ""
             );
@@ -503,18 +503,12 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         // also helps for figuring out how much more net is in escrow
         address lastHighestBidder = highestBidder[auctionId];
         uint256 lastHighestAmount = bids[auctionId][lastHighestBidder].amount;
-        unchecked {
-            escrow[currency] += totalAmount - lastHighestAmount;
-        }
+        escrow[currency] += totalAmount - lastHighestAmount;
 
         // last bidder can claim their fund now
         if (lastHighestBidder != msg.sender) {
             delete bids[auctionId][lastHighestBidder].amount;
-            unchecked {
-                claimableFunds[lastHighestBidder][
-                    currency
-                ] += lastHighestAmount;
-            }
+            claimableFunds[lastHighestBidder][currency] += lastHighestAmount;
 
             emit BalanceUpdated(
                 lastHighestBidder,
@@ -523,9 +517,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             );
         }
         if (amountFromBalance != 0) {
-            unchecked {
-                claimableFunds[msg.sender][currency] -= amountFromBalance;
-            }
+            claimableFunds[msg.sender][currency] -= amountFromBalance;
 
             emit BalanceUpdated(msg.sender, currency, amountFromBalance);
         }
@@ -598,10 +590,8 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 highestBid = bids[auctionId][highestBidder_].amount;
 
         // current highest bid moves from escrow to being reclaimable
-        unchecked {
-            escrow[currency] -= highestBid;
-            claimableFunds[highestBidder_][currency] += highestBid;
-        }
+        escrow[currency] -= highestBid;
+        claimableFunds[highestBidder_][currency] += highestBid;
 
         emit BalanceUpdated(
             highestBidder_,
@@ -691,9 +681,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     ) private {
         address currency = auctions[auctionId].currency;
 
-        unchecked {
-            escrow[currency] -= fundsToPay;
-        }
+        escrow[currency] -= fundsToPay;
         // if this is from a successful auction
         (address artistAddress, uint256 royalties) = nftContract.royaltyInfo(
             auctions[auctionId].nftId,
@@ -705,9 +693,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         unchecked {
             fundsToPay -= fee;
         }
-        unchecked {
-            claimableFunds[systemWallet][currency] += fee;
-        }
+        claimableFunds[systemWallet][currency] += fee;
 
         emit BalanceUpdated(
             systemWallet,
@@ -720,9 +706,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             unchecked {
                 fundsToPay -= royalties;
             }
-            unchecked {
-                claimableFunds[artistAddress][currency] += royalties;
-            }
+            claimableFunds[artistAddress][currency] += royalties;
 
             emit BalanceUpdated(
                 artistAddress,
@@ -732,11 +716,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         }
 
         // seller gains
-        unchecked {
-            claimableFunds[auctions[auctionId].owner][
-                auctions[auctionId].currency
-            ] += fundsToPay;
-        }
+        claimableFunds[auctions[auctionId].owner][
+            auctions[auctionId].currency
+        ] += fundsToPay;
 
         emit BalanceUpdated(
             auctions[auctionId].owner,
