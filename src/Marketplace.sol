@@ -25,7 +25,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     // address alias for using ETH as a currency
     address private constant ETH =
         address(0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa);
-    IRegistry private immutable _registry;
+    IRegistry private immutable _REGISTRY;
 
     /*//////////////////////////////////////////////////////////////
                                 EVENTS
@@ -157,7 +157,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     //////////////////////////////////////////////////////////////*/
 
     constructor(address registry) {
-        _registry = IRegistry(registry);
+        _REGISTRY = IRegistry(registry);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -236,7 +236,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 amountToBuy,
         uint256 amountFromBalance
     ) external payable returns (bool) {
-        if (!_registry.platformContracts(address(this)))
+        if (!_REGISTRY.platformContracts(address(this)))
             revert ContractIsDeprecated();
         if (getSaleStatus(saleId) != "ACTIVE") revert SaleIsNotActive();
 
@@ -251,19 +251,23 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             }
         }
 
-        SaleInfo memory saleInfo = sales[saleId];
-        if (amountToBuy > saleInfo.amount - saleInfo.purchased)
+        uint256 nftId = sales[saleId].nftId;
+        uint256 price = sales[saleId].price;
+        uint256 salePurchased = sales[saleId].purchased;
+        address owner = sales[saleId].owner;
+
+        if (amountToBuy > sales[saleId].amount - salePurchased)
             revert NotEnoughStock();
 
-        address currency = saleInfo.currency;
+        address currency = sales[saleId].currency;
         if (amountFromBalance > claimableFunds[msg.sender][currency])
             revert NotEnoughBalance();
 
-        INFT nftContract = INFT(saleInfo.nftAddress);
+        INFT nftContract = INFT(sales[saleId].nftAddress);
 
         (address artistAddress, uint256 royalties) = nftContract.royaltyInfo(
-            saleInfo.nftId,
-            amountToBuy * saleInfo.price
+            nftId,
+            amountToBuy * price
         );
 
         // send the nft price to the platform
@@ -273,10 +277,10 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             token.safeTransferFrom(
                 msg.sender,
                 address(this),
-                (amountToBuy * saleInfo.price) - amountFromBalance
+                (amountToBuy * price) - amountFromBalance
             );
         } else {
-            if (msg.value != (amountToBuy * saleInfo.price) - amountFromBalance)
+            if (msg.value != (amountToBuy * price) - amountFromBalance)
                 revert InputValueAndPriceMismatch();
         }
         if (amountFromBalance != 0) {
@@ -286,13 +290,13 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         }
 
         // system fee
-        (address systemWallet, uint256 fee) = _registry.feeInfo(
-            amountToBuy * saleInfo.price
+        (address systemWallet, uint256 fee) = _REGISTRY.feeInfo(
+            amountToBuy * price
         );
         claimableFunds[systemWallet][currency] += fee;
 
         // artist royalty if artist isn't the seller
-        if (saleInfo.owner != artistAddress) {
+        if (owner != artistAddress) {
             claimableFunds[artistAddress][currency] += royalties;
         } else {
             // since the artist is the seller
@@ -301,27 +305,22 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
         unchecked {
             // seller gains
-            claimableFunds[saleInfo.owner][currency] +=
-                (amountToBuy * saleInfo.price) -
+            claimableFunds[owner][currency] +=
+                (amountToBuy * price) -
                 fee -
                 royalties;
             // update the sale info
-            sales[saleId].purchased += amountToBuy;
+            salePurchased += amountToBuy;
             purchased[saleId][msg.sender] += amountToBuy;
         }
 
         // send the nft to the buyer
-        saleInfo.isERC721
-            ? nftContract.safeTransferFrom(
-                address(this),
-                recipient,
-                saleInfo.nftId,
-                ""
-            )
+        sales[saleId].isERC721
+            ? nftContract.safeTransferFrom(address(this), recipient, nftId, "")
             : nftContract.safeTransferFrom(
                 address(this),
                 recipient,
-                saleInfo.nftId,
+                nftId,
                 amountToBuy,
                 ""
             );
@@ -338,25 +337,24 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         if (status != "CANCELLED" && status != "ENDED")
             revert SaleIsNotClosed();
 
-        SaleInfo memory saleInfo = sales[saleId];
-        if (msg.sender != saleInfo.owner) revert OnlyNFTOwnerCanClaim();
-        if (saleInfo.purchased == saleInfo.amount)
-            revert StockAlreadySoldOrClaimed();
+        address nftAddress = sales[saleId].nftAddress;
+        uint256 nftId = sales[saleId].nftId;
+        uint256 amount = sales[saleId].amount;
+        uint256 salePurchased = sales[saleId].purchased;
+        address owner = sales[saleId].owner;
 
-        uint256 stock = saleInfo.amount - saleInfo.purchased;
+        if (msg.sender != owner) revert OnlyNFTOwnerCanClaim();
+        if (salePurchased == amount) revert StockAlreadySoldOrClaimed();
+
+        uint256 stock = amount - salePurchased;
         // update the sale info and send the nfts back to the seller
-        sales[saleId].purchased = saleInfo.amount;
-        saleInfo.isERC721
-            ? INFT(saleInfo.nftAddress).safeTransferFrom(
+        sales[saleId].purchased = amount;
+        sales[saleId].isERC721
+            ? INFT(nftAddress).safeTransferFrom(address(this), owner, nftId, "")
+            : INFT(nftAddress).safeTransferFrom(
                 address(this),
-                saleInfo.owner,
-                saleInfo.nftId,
-                ""
-            )
-            : INFT(saleInfo.nftAddress).safeTransferFrom(
-                address(this),
-                saleInfo.owner,
-                saleInfo.nftId,
+                owner,
+                nftId,
                 stock,
                 ""
             );
@@ -475,7 +473,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 amountFromBalance,
         uint256 externalFunds
     ) external payable returns (bool) {
-        if (!_registry.platformContracts(address(this)))
+        if (!_REGISTRY.platformContracts(address(this)))
             revert ContractIsDeprecated();
         if (getAuctionStatus(auctionId) != "ACTIVE")
             revert AuctionIsNotActive();
@@ -549,13 +547,12 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         if (status != "CANCELLED" && status != "ENDED")
             revert AuctionIsNotEndOrCancelled();
 
-        AuctionInfo memory auctionInfo = auctions[auctionId];
+        uint256 nftId = auctions[auctionId].nftId;
+        address owner = auctions[auctionId].owner;
         address highestBidder_ = highestBidder[auctionId];
         uint256 winningBid = bids[auctionId][highestBidder_].amount;
-        uint256 totalFundsToPay = msg.sender == auctionInfo.owner
-            ? 0
-            : winningBid;
-        INFT nftContract = INFT(auctionInfo.nftAddress);
+        uint256 totalFundsToPay = msg.sender == owner ? 0 : winningBid;
+        INFT nftContract = INFT(auctions[auctionId].nftAddress);
 
         // accounting logic
         address recipient;
@@ -563,19 +560,14 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             _nftPayment(auctionId, winningBid, nftContract);
             recipient = highestBidder_;
         } else {
-            recipient = auctionInfo.owner;
+            recipient = owner;
         }
-        auctionInfo.isERC721
-            ? nftContract.safeTransferFrom(
-                address(this),
-                recipient,
-                auctionInfo.nftId,
-                ""
-            )
+        auctions[auctionId].isERC721
+            ? nftContract.safeTransferFrom(address(this), recipient, nftId, "")
             : nftContract.safeTransferFrom(
                 address(this),
                 recipient,
-                auctionInfo.nftId,
+                nftId,
                 1,
                 ""
             );
@@ -583,7 +575,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         claimed[auctionId] = true;
 
         emit ClaimAuctionNFT(
-            auctionInfo.id,
+            auctions[auctionId].id,
             msg.sender,
             recipient,
             bids[auctionId][highestBidder_].amount
@@ -629,7 +621,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
         if (
             cancelledAuction[auctionId] ||
-            !_registry.platformContracts(address(this))
+            !_REGISTRY.platformContracts(address(this))
         ) return "CANCELLED";
 
         if (claimed[auctionId]) return "ENDED & CLAIMED";
@@ -651,7 +643,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         if (saleId > saleIdCounter || saleId == 0) revert SaleDoesNotExist();
 
         if (
-            cancelledSale[saleId] || !_registry.platformContracts(address(this))
+            cancelledSale[saleId] || !_REGISTRY.platformContracts(address(this))
         ) return "CANCELLED";
 
         SaleInfo memory saleInfo = sales[saleId];
@@ -680,11 +672,11 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 endTime,
         address currency
     ) private {
-        if (!_registry.platformContracts(nftAddress))
+        if (!_REGISTRY.platformContracts(nftAddress))
             revert NFTContractIsNotApproved();
-        if (!_registry.platformContracts(address(this)))
+        if (!_REGISTRY.platformContracts(address(this)))
             revert ContractIsDeprecated();
-        if (!_registry.approvedCurrencies(currency))
+        if (!_REGISTRY.approvedCurrencies(currency))
             revert CurrencyIsNotSupported();
         if (!INFT(nftAddress).supportsInterface(0x2a55205a))
             revert ContractMustSupportERC2981();
@@ -697,20 +689,19 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         uint256 fundsToPay,
         INFT nftContract
     ) private {
-        AuctionInfo memory auctionInfo = auctions[auctionId];
-        address currency = auctionInfo.currency;
+        address currency = auctions[auctionId].currency;
 
         unchecked {
             escrow[currency] -= fundsToPay;
         }
         // if this is from a successful auction
         (address artistAddress, uint256 royalties) = nftContract.royaltyInfo(
-            auctionInfo.nftId,
+            auctions[auctionId].nftId,
             fundsToPay
         );
 
         // system fee
-        (address systemWallet, uint256 fee) = _registry.feeInfo(fundsToPay);
+        (address systemWallet, uint256 fee) = _REGISTRY.feeInfo(fundsToPay);
         unchecked {
             fundsToPay -= fee;
         }
@@ -725,7 +716,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         );
 
         // artist royalty if artist isn't the seller
-        if (auctionInfo.owner != artistAddress) {
+        if (auctions[auctionId].owner != artistAddress) {
             unchecked {
                 fundsToPay -= royalties;
             }
