@@ -55,7 +55,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
 
     event NewAuction(uint256 indexed auctionId, AuctionInfo newAuction);
     event AuctionCancelled(uint256 indexed auctionId);
-    event BidPlaced(uint256 indexed auctionId, uint256 amount);
+    event BidPlaced(uint256 indexed auctionId, uint256 totalAmount);
     event ClaimAuctionNFT(
         uint256 indexed auctionId,
         address indexed claimer,
@@ -87,6 +87,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
     error SaleMustBeActiveOrPending();
     error AuctionIsNotActive();
     error BidIsNotHighEnough();
+    error BidLoweThanReservePrice();
     error ArgumentsAndValueMismatch();
     error AuctionIsNotEndOrCancelled();
     error OnlyOwnerOrAuctionCreator();
@@ -395,7 +396,7 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
         if (msg.sender != sales[saleId].owner && msg.sender != owner())
             revert OnlyOwnerOrSaleCreator();
 
-        bytes32 status = getAuctionStatus(saleId);
+        bytes32 status = getSaleStatus(saleId);
         if (status != "ACTIVE" && status != "PENDING")
             revert SaleMustBeActiveOrPending();
 
@@ -484,9 +485,9 @@ contract Marketplace is ERC721Holder, ERC1155Holder, Ownable {
             bids[auctionId][msg.sender].amount;
 
         if (totalAmount <= bids[auctionId][highestBidder[auctionId]].amount)
-            revert AuctionIsNotActive();
-        if (totalAmount < auctions[auctionId].reservePrice)
             revert BidIsNotHighEnough();
+        if (totalAmount < auctions[auctionId].reservePrice)
+            revert BidLoweThanReservePrice();
 
         address currency = auctions[auctionId].currency;
         if (amountFromBalance > claimableFunds[msg.sender][currency])
