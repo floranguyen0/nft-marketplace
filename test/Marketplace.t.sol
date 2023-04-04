@@ -101,7 +101,7 @@ contract MarketplaceTest is Test {
         uint256 indexed newBalance
     );
 
-    event BidPlaced(uint256 auctionId, uint256 amount);
+    event BidPlaced(uint256 indexed auctionId, uint256 totalAmount);
 
     struct Bid {
         uint256 amount;
