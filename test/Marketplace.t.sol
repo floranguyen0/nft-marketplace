@@ -232,7 +232,7 @@ contract MarketplaceTest is Test {
         vm.startPrank(addressA);
         nft721.approve(address(marketPlace), 1);
 
-        vm.expectRevert("NFT is not in approved contract");
+        vm.expectRevert(bytes4(keccak256("NFTContractIsNotApproved()")));
         marketPlace.createSale({
             isERC721: true,
             nftAddress: address(nft721),
@@ -252,7 +252,7 @@ contract MarketplaceTest is Test {
         vm.startPrank(addressA);
         nft721.approve(address(marketPlace), 2);
 
-        vm.expectRevert("This contract is deprecated");
+        vm.expectRevert(bytes4(keccak256("ContractIsDeprecated()")));
         marketPlace.createSale({
             isERC721: true,
             nftAddress: address(nft721),
@@ -272,7 +272,7 @@ contract MarketplaceTest is Test {
         vm.startPrank(addressA);
         nft721.approve(address(marketPlace), 2);
 
-        vm.expectRevert("Currency is not supported");
+        vm.expectRevert(bytes4(keccak256("CurrencyIsNotSupported()")));
         marketPlace.createSale({
             isERC721: true,
             nftAddress: address(nft721),
@@ -293,7 +293,7 @@ contract MarketplaceTest is Test {
         vm.startPrank(addressA);
         nft.approve(address(marketPlace), 2);
 
-        vm.expectRevert("Contract must support ERC2981");
+        vm.expectRevert(bytes4(keccak256("ContractMustSupportERC2981()")));
         marketPlace.createSale({
             isERC721: true,
             nftAddress: address(nft),
@@ -312,7 +312,9 @@ contract MarketplaceTest is Test {
         vm.startPrank(addressA);
         nft721.approve(address(marketPlace), 2);
 
-        vm.expectRevert("Error in start/end params");
+        vm.expectRevert(
+            bytes4(keccak256("EndTimeMustBeGreaterThanStartTime()"))
+        );
         marketPlace.createSale({
             isERC721: true,
             nftAddress: address(nft721),
@@ -331,7 +333,7 @@ contract MarketplaceTest is Test {
         vm.startPrank(addressA);
         nft721.approve(address(marketPlace), 2);
 
-        vm.expectRevert("Can only sell one NFT for ERC721");
+        vm.expectRevert(bytes4(keccak256("CanOnlySellOneNFT()")));
         marketPlace.createSale({
             isERC721: true,
             nftAddress: address(nft721),
@@ -514,7 +516,7 @@ contract MarketplaceTest is Test {
         registry.setContractStatus(address(marketPlace), false);
         vm.startPrank(address(addressA));
         mockCurrency.approve(address(marketPlace), 100);
-        vm.expectRevert("This contract is deprecated");
+        vm.expectRevert(bytes4(keccak256("ContractIsDeprecated()")));
         marketPlace.buy({
             saleId: 1,
             recipient: address(addressB),
@@ -547,7 +549,7 @@ contract MarketplaceTest is Test {
             amountFromBalance: 0
         });
 
-        vm.expectRevert("Sale is not active");
+        vm.expectRevert(bytes4(keccak256("SaleIsNotActive()")));
         marketPlace.buy({
             saleId: 1,
             recipient: address(addressB),
@@ -573,7 +575,7 @@ contract MarketplaceTest is Test {
         mockCurrency.transfer(addressB, 10_000);
         mockCurrency.approve(address(marketPlace), 200);
 
-        vm.expectRevert("Not enough stock for purchase");
+        vm.expectRevert(bytes4(keccak256("NotEnoughStock()")));
         marketPlace.buy({
             saleId: 1,
             recipient: address(addressB),
@@ -599,7 +601,7 @@ contract MarketplaceTest is Test {
         mockCurrency.transfer(addressB, 10_000);
         mockCurrency.approve(address(marketPlace), 200);
 
-        vm.expectRevert("Not enough balance");
+        vm.expectRevert(bytes4(keccak256("NotEnoughBalance()")));
         marketPlace.buy({
             saleId: 1,
             recipient: address(addressB),
@@ -713,7 +715,7 @@ contract MarketplaceTest is Test {
         });
 
         // claim nft(s)
-        vm.expectRevert("Cannot claim before sale closes");
+        vm.expectRevert(bytes4(keccak256("SaleIsNotClosed()")));
         marketPlace.claimSaleNfts(1);
     }
 
@@ -736,7 +738,7 @@ contract MarketplaceTest is Test {
 
         // claim nft(s)
         skip(4 days);
-        vm.expectRevert("Only nft owner can claim");
+        vm.expectRevert(bytes4(keccak256("OnlyNFTOwnerCanClaim()")));
         marketPlace.claimSaleNfts(1);
     }
 
@@ -761,7 +763,7 @@ contract MarketplaceTest is Test {
         marketPlace.claimSaleNfts(1);
 
         // claim nft(s) again
-        vm.expectRevert("Stock already sold or claimed");
+        vm.expectRevert(bytes4(keccak256("StockAlreadySoldOrClaimed()")));
         marketPlace.claimSaleNfts(1);
     }
 
@@ -820,7 +822,7 @@ contract MarketplaceTest is Test {
     }
 
     function testClaimedFundFailNothingToClaim() public {
-        vm.expectRevert("Nothing to claim");
+        vm.expectRevert(bytes4(keccak256("NothingToClaim()")));
         marketPlace.claimFunds(address(mockCurrency));
     }
 
@@ -867,7 +869,7 @@ contract MarketplaceTest is Test {
 
         vm.stopPrank();
         vm.prank(address(addressD));
-        vm.expectRevert("Only owner or sale creator");
+        vm.expectRevert(bytes4(keccak256("OnlyOwnerOrSaleCreator()")));
         marketPlace.cancelSale(1);
     }
 
@@ -888,8 +890,9 @@ contract MarketplaceTest is Test {
         });
 
         marketPlace.cancelSale(1);
-        vm.expectRevert("Must be active or pending");
+        vm.expectRevert(bytes4(keccak256("SaleMustBeActiveOrPending()")));
         marketPlace.cancelSale(1);
+        vm.stopPrank();
     }
 
     function testCreateAuctionERC721() public {
@@ -1036,7 +1039,7 @@ contract MarketplaceTest is Test {
         mockCurrency.approve(address(marketPlace), 200);
         registry.setContractStatus(address(marketPlace), false);
         vm.prank(addressB);
-        vm.expectRevert("This contract is deprecated");
+        vm.expectRevert(bytes4(keccak256("ContractIsDeprecated()")));
         marketPlace.bid({
             auctionId: 1,
             amountFromBalance: 0,
@@ -1063,7 +1066,7 @@ contract MarketplaceTest is Test {
 
         vm.startPrank(addressB);
         mockCurrency.approve(address(marketPlace), 200);
-        vm.expectRevert("Auction is not active");
+        vm.expectRevert(bytes4(keccak256("AuctionIsNotActive()")));
         marketPlace.bid({
             auctionId: 1,
             amountFromBalance: 0,
@@ -1094,9 +1097,9 @@ contract MarketplaceTest is Test {
             amountFromBalance: 0,
             externalFunds: 300
         });
-
-        vm.expectRevert("Bid is not high enough");
         vm.stopPrank();
+
+        vm.expectRevert(bytes4(keccak256("BidIsNotHighEnough()")));
         vm.prank(addressA);
         marketPlace.bid({
             auctionId: 1,
@@ -1123,7 +1126,7 @@ contract MarketplaceTest is Test {
 
         vm.startPrank(addressB);
         mockCurrency.approve(address(marketPlace), 200);
-        vm.expectRevert("Bid is lower than the reserve price");
+        vm.expectRevert(bytes4(keccak256("BidLoweThanReservePrice()")));
         marketPlace.bid({
             auctionId: 1,
             amountFromBalance: 0,
@@ -1149,7 +1152,7 @@ contract MarketplaceTest is Test {
 
         vm.startPrank(addressB);
         mockCurrency.approve(address(marketPlace), 200);
-        vm.expectRevert("Not enough balance");
+        vm.expectRevert(bytes4(keccak256("NotEnoughBalance()")));
         marketPlace.bid({
             auctionId: 1,
             amountFromBalance: 100,
@@ -1233,9 +1236,7 @@ contract MarketplaceTest is Test {
             externalFunds: 200
         });
 
-        vm.expectRevert(
-            "Can only resolve after the auction ends or is cancelled"
-        );
+        vm.expectRevert(bytes4(keccak256("AuctionIsNotEndOrCancelled()")));
         marketPlace.resolveAuction(1);
     }
 }
