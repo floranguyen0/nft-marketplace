@@ -21,12 +21,9 @@ contract NFT is ERC721, Ownable {
 contract NFT721 is ERC721, ERC2981, Ownable {
     constructor() ERC721("NFT721", "NFT721") {}
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC2981, ERC721)
-        returns (bool)
-    {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view override(ERC2981, ERC721) returns (bool) {
         return
             ERC2981.supportsInterface(interfaceId) ||
             ERC721.supportsInterface(interfaceId);
@@ -40,22 +37,15 @@ contract NFT721 is ERC721, ERC2981, Ownable {
 contract NFT1155 is ERC1155, ERC2981, Ownable {
     constructor() ERC1155("baseURI") {}
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC1155, ERC2981)
-        returns (bool)
-    {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view override(ERC1155, ERC2981) returns (bool) {
         return
             ERC2981.supportsInterface(interfaceId) ||
             ERC1155.supportsInterface(interfaceId);
     }
 
-    function mint(
-        address to,
-        uint256 id,
-        uint256 amount
-    ) external onlyOwner {
+    function mint(address to, uint256 id, uint256 amount) external onlyOwner {
         _mint(to, id, amount, "");
     }
 
@@ -72,7 +62,7 @@ contract MockCurrency is ERC20, Test {
     address addressA = vm.addr(1);
 
     constructor() ERC20("Mock Currency", "MC") {
-        _mint(address(addressA), 100_000 * 10**18);
+        _mint(address(addressA), 100_000 * 10 ** 18);
     }
 }
 
@@ -156,16 +146,16 @@ contract MarketplaceTest is Test {
 
         // save sale info correctly
         (
+            uint128 nftId,
             bool isERC721,
             address nftAddress,
-            uint256 nftId,
             address owner,
+            address currency,
             uint256 amount,
             uint256 purchased,
             uint256 startTime,
             uint256 endTime,
-            uint256 price,
-            address currency
+            uint256 price
         ) = marketPlace.sales(1);
 
         assertEq(isERC721, true);
@@ -208,16 +198,16 @@ contract MarketplaceTest is Test {
 
         // save sale info correctly
         (
+            uint128 nftId,
             bool isERC721,
             address nftAddress,
-            uint256 nftId,
             address owner,
+            address currency,
             uint256 amount,
             uint256 purchased,
             uint256 startTime,
             uint256 endTime,
-            uint256 price,
-            address currency
+            uint256 price
         ) = marketPlace.sales(1);
 
         assertEq(isERC721, false);
@@ -408,16 +398,16 @@ contract MarketplaceTest is Test {
 
         // update sale info
         (
+            uint128 nftId,
             bool isERC721,
             address nftAddress,
-            uint256 nftId,
             address owner,
+            address currency,
             uint256 amount,
             uint256 purchased,
             uint256 startTime,
             uint256 endTime,
-            uint256 price,
-            address currency
+            uint256 price
         ) = marketPlace.sales(1);
         assertEq(purchased, 1);
         assertEq(marketPlace.purchased(1, address(addressB)), 1);
@@ -485,16 +475,16 @@ contract MarketplaceTest is Test {
 
         // update sale info
         (
+            uint128 nftId,
             bool isERC721,
             address nftAddress,
-            uint256 nftId,
             address owner,
+            address currency,
             uint256 amount,
             uint256 purchased,
             uint256 startTime,
             uint256 endTime,
-            uint256 price,
-            address currency
+            uint256 price
         ) = marketPlace.sales(1);
         assertEq(purchased, 3);
         assertEq(marketPlace.purchased(1, address(addressA)), 3);
@@ -642,16 +632,16 @@ contract MarketplaceTest is Test {
 
         // update purchased info correctly
         (
+            uint128 nftId,
             bool isERC721,
             address nftAddress,
-            uint256 nftId,
             address owner,
+            address currency,
             uint256 amount,
             uint256 purchased,
             uint256 startTime,
             uint256 endTime,
-            uint256 price,
-            address currency
+            uint256 price
         ) = marketPlace.sales(1);
         assertEq(purchased, 1);
 
@@ -688,16 +678,16 @@ contract MarketplaceTest is Test {
 
         // update purchased info correctly
         (
+            uint128 nftId,
             bool isERC721,
             address nftAddress,
-            uint256 nftId,
             address owner,
+            address currency,
             uint256 amount,
             uint256 purchased,
             uint256 startTime,
             uint256 endTime,
-            uint256 price,
-            address currency
+            uint256 price
         ) = marketPlace.sales(1);
         assertEq(purchased, 3);
 
@@ -924,15 +914,15 @@ contract MarketplaceTest is Test {
 
         // save auction info correctly
         (
+            uint128 id,
+            uint128 nftId,
             bool isERC721,
-            uint256 id,
-            address owner,
             address nftAddress,
-            uint256 nftId,
+            address owner,
+            address currency,
             uint256 startTime,
             uint256 endTime,
-            uint256 reservePrice,
-            address currency
+            uint256 reservePrice
         ) = marketPlace.auctions(1);
 
         assertEq(isERC721, true);
@@ -967,15 +957,15 @@ contract MarketplaceTest is Test {
 
         // save auction info correctly
         (
+            uint128 id,
+            uint128 nftId,
             bool isERC721,
-            uint256 id,
-            address owner,
             address nftAddress,
-            uint256 nftId,
+            address owner,
+            address currency,
             uint256 startTime,
             uint256 endTime,
-            uint256 reservePrice,
-            address currency
+            uint256 reservePrice
         ) = marketPlace.auctions(1);
 
         assertEq(isERC721, false);
